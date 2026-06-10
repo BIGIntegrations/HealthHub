@@ -1,0 +1,16 @@
+{
+  "name": "Health Hub",
+  "short_name": "Health Hub",
+  "description": "Personal health, fitness, budget and wellness tracker",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d0f12",
+  "theme_color": "#0d0f12",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "favicon.ico",          "sizes": "48x48",   "type": "image/x-icon" },
+    { "src": "icon-192x192.png",     "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

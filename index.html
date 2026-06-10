@@ -1,0 +1,2417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Health Hub</title>
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- Theme & status bar -->
+<meta name="theme-color" content="#0d0f12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Health Hub">
+
+<!-- Favicon -->
+<link rel="shortcut icon" href="favicon.ico">
+
+<!-- Apple touch icon — home screen & Safari bookmark -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+<!-- SEO -->
+<meta name="description" content="Personal health, fitness, budget and wellness tracker">
+<meta name="author" content="Health Hub">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js"></script>
+<style>
+  :root {
+    --bg: #0d0f12;
+    --bg2: #13161b;
+    --bg3: #1a1e26;
+    --border: #242830;
+    --accent: #00e5a0;
+    --accent2: #ff6b35;
+    --accent3: #5b8cff;
+    --accent4: #c77dff;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --danger: #ff4757;
+    --card-r: 14px;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+
+  /* NAV */
+  .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(13,15,18,0.92); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); height: 58px; display: flex; align-items: center; }
+  .nav-brand { font-size: 17px; font-weight: 800; letter-spacing: -0.5px; color: var(--accent); white-space: nowrap; padding: 0 14px 0 20px; flex-shrink: 0; }
+  .nav-brand span { color: var(--text); }
+  .nav-scroll-wrap { position: relative; flex: 1; min-width: 0; }
+  .nav-scroll-wrap::after { content: ''; position: absolute; top: 0; right: 0; width: 48px; height: 100%; background: linear-gradient(to right, transparent, rgba(13,15,18,0.95)); pointer-events: none; }
+  .nav-tabs { display: flex; align-items: center; gap: 4px; overflow-x: auto; padding: 0 12px 0 0; scrollbar-width: none; -ms-overflow-style: none; }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-btn { background: none; border: none; color: var(--muted); font-family: var(--sans); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; transition: all .2s; letter-spacing: .4px; text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
+  .nav-btn:hover { color: var(--text); background: var(--bg3); }
+  .nav-btn.active { color: var(--bg); background: var(--accent); }
+
+  /* PAGES */
+  .page { display: none; padding: 78px 20px 40px; max-width: 960px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* SHARED */
+  h1 { font-size: 26px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
+  h2 { font-size: 16px; font-weight: 700; letter-spacing: -.3px; margin-bottom: 14px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; font-family: var(--mono); }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--card-r); padding: 20px; margin-bottom: 16px; }
+  .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 10px; font-weight: 500; padding: 3px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: .6px; }
+  .tag-green { background: rgba(0,229,160,.12); color: var(--accent); }
+  .tag-orange { background: rgba(255,107,53,.12); color: var(--accent2); }
+  .tag-blue { background: rgba(91,140,255,.12); color: var(--accent3); }
+  .tag-purple { background: rgba(199,125,255,.12); color: var(--accent4); }
+  .tag-red { background: rgba(255,71,87,.12); color: var(--danger); }
+
+  .input-row { display: grid; gap: 10px; margin-bottom: 12px; }
+  .ir-2 { grid-template-columns: 1fr 1fr; }
+  .ir-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .ir-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  label { font-size: 11px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 5px; }
+  input, select, textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: 13px; outline: none; transition: border .2s; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  select option { background: var(--bg3); }
+  textarea { resize: vertical; min-height: 70px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: 8px; border: none; font-family: var(--sans); font-size: 13px; font-weight: 700; cursor: pointer; transition: all .2s; letter-spacing: .2px; }
+  .btn-primary { background: var(--accent); color: #0d0f12; }
+  .btn-primary:hover { background: #00c987; }
+  .btn-ghost { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger { background: rgba(255,71,87,.12); color: var(--danger); border: 1px solid rgba(255,71,87,.2); }
+  .btn-danger:hover { background: rgba(255,71,87,.22); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+  /* DASHBOARD */
+  .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .dash-tile { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--card-r); padding: 18px; position: relative; overflow: hidden; transition: border-color .2s; }
+  .dash-tile:hover { border-color: var(--accent); }
+  .dash-tile .dt-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
+  .dash-tile .dt-val { font-size: 28px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; }
+  .dash-tile .dt-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .dash-tile .dt-accent { position: absolute; bottom: 0; right: 0; width: 60px; height: 60px; border-radius: 50% 0 0 0; opacity: .08; }
+
+  /* LIST ITEMS */
+  .list-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .list-item:last-child { border-bottom: none; }
+  .li-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .li-body { flex: 1; min-width: 0; }
+  .li-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .li-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .li-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* PROGRESS BAR */
+  .progress-wrap { background: var(--bg3); border-radius: 20px; height: 6px; margin-top: 6px; overflow: hidden; }
+  .progress-bar { height: 100%; border-radius: 20px; transition: width .5s ease; }
+
+  /* MED TRACKER */
+  .med-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .med-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 14px; transition: border-color .2s; }
+  .med-card.taken { border-color: var(--accent); background: rgba(0,229,160,.04); }
+  .med-name { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+  .med-dose { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .med-check { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .check-btn { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 5px 12px; font-size: 12px; font-family: var(--sans); font-weight: 700; cursor: pointer; transition: all .2s; color: var(--muted); }
+  .check-btn.taken { background: var(--accent); color: #0d0f12; border-color: var(--accent); }
+  .streak-badge { font-family: var(--mono); font-size: 10px; color: var(--accent); }
+
+  /* BUDGET */
+  .free-cash-hero { background: linear-gradient(135deg, #0d1f16 0%, #0d1520 100%); border: 1px solid rgba(0,229,160,.2); border-radius: var(--card-r); padding: 24px 20px; margin-bottom: 16px; text-align: center; position: relative; overflow: hidden; }
+  .free-cash-hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(0,229,160,.08) 0%, transparent 70%); }
+  .free-cash-label { font-family: var(--mono); font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .free-cash-amount { font-size: 52px; font-weight: 800; letter-spacing: -3px; line-height: 1; color: var(--accent); margin-bottom: 6px; }
+  .free-cash-amount.warn { color: var(--accent2); }
+  .free-cash-amount.danger { color: var(--danger); }
+  .free-cash-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .budget-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .bstat { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .bstat-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .bstat-val { font-size: 18px; font-weight: 800; letter-spacing: -.5px; }
+
+  /* ENVELOPES */
+  .envelope-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 6px; }
+  .envelope { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px; cursor: pointer; transition: all .2s; position: relative; overflow: hidden; }
+  .envelope:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .envelope.selected { border-color: var(--accent); background: rgba(0,229,160,.06); }
+  .env-emoji { font-size: 22px; margin-bottom: 8px; }
+  .env-name { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+  .env-left { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+  .env-budget { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .env-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .env-bar-fill { height: 100%; border-radius: 2px; transition: width .4s ease; }
+  .env-add-btn { background: var(--bg3); border: 1px dashed var(--border); border-radius: 12px; padding: 14px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--muted); font-size: 22px; transition: all .2s; }
+  .env-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* BILLS */
+  .bill-item { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+  .bill-item:last-child { border-bottom: none; }
+  .bill-due { font-family: var(--mono); font-size: 10px; text-align: center; width: 36px; flex-shrink: 0; }
+  .bill-due-day { font-size: 16px; font-weight: 800; line-height: 1; }
+  .bill-due-mo { font-size: 9px; color: var(--muted); }
+  .bill-paid-btn { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); background: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; transition: all .2s; flex-shrink: 0; color: var(--muted); }
+  .bill-paid-btn.paid { background: var(--accent); border-color: var(--accent); color: #0d0f12; }
+  .bill-urgent { color: var(--accent2); }
+  .bill-overdue { color: var(--danger); }
+
+  /* QUICK ADD */
+  .quick-add { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .quick-chip { background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px; font-size: 12px; font-family: var(--mono); cursor: pointer; transition: all .2s; white-space: nowrap; }
+  .quick-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* SAVINGS GOAL */
+  .goal-card { background: linear-gradient(135deg, #0d1225 0%, #150d25 100%); border: 1px solid rgba(91,140,255,.2); border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+  .goal-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .goal-amounts { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .goal-bar { height: 8px; background: var(--bg3); border-radius: 4px; overflow: hidden; }
+  .goal-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent3), var(--accent4)); border-radius: 4px; transition: width .5s ease; }
+  .goal-pct { font-family: var(--mono); font-size: 10px; color: var(--accent3); margin-top: 4px; }
+
+  /* DONUT CHART */
+  .donut-wrap { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .donut-svg { flex-shrink: 0; }
+  .donut-legend { display: flex; flex-direction: column; gap: 6px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  .tx-list { max-height: 360px; overflow-y: auto; }
+  .budget-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .budget-tab { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; font-size: 12px; font-family: var(--mono); cursor: pointer; transition: all .2s; }
+  .budget-tab.active { background: var(--accent); color: #0d0f12; border-color: var(--accent); font-weight: 700; }
+
+  /* ENVELOPE MODAL */
+  .env-modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 18px; padding: 24px; width: 100%; max-width: 400px; }
+
+  /* DEBT TRACKER */
+  .debt-type-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .debt-type-tab { flex: 1; text-align: center; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 8px; cursor: pointer; transition: all .2s; }
+  .debt-type-tab:hover { border-color: var(--accent); }
+  .debt-type-tab.active { border-color: var(--accent2); background: rgba(255,107,53,.08); }
+  .debt-type-tab .dtt-icon { font-size: 20px; margin-bottom: 4px; }
+  .debt-type-tab .dtt-label { font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+  .debt-type-tab .dtt-sub { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .debt-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+  .debt-card.advance { border-left: 3px solid var(--accent2); }
+  .debt-card.arrangement { border-left: 3px solid var(--accent3); }
+  .debt-card.bnpl { border-left: 3px solid var(--accent4); }
+  .debt-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .debt-title { font-size: 14px; font-weight: 700; }
+  .debt-source { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .debt-amounts { display: flex; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
+  .debt-amt-label { font-family: var(--mono); font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .debt-amt-val { font-size: 16px; font-weight: 800; letter-spacing: -.5px; }
+  .installment-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .installment { display: flex; align-items: center; gap: 10px; background: var(--bg2); border-radius: 8px; padding: 8px 12px; }
+  .inst-num { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 20px; flex-shrink: 0; }
+  .inst-body { flex: 1; }
+  .inst-date { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .inst-amt { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  .inst-badge { font-family: var(--mono); font-size: 9px; padding: 2px 7px; border-radius: 10px; }
+  .inst-paid { background: rgba(0,229,160,.12); color: var(--accent); }
+  .inst-due { background: rgba(255,107,53,.12); color: var(--accent2); }
+  .inst-upcoming { background: rgba(107,114,128,.12); color: var(--muted); }
+  .inst-overdue { background: rgba(255,71,87,.15); color: var(--danger); }
+  .inst-pay-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-family: var(--sans); font-weight: 700; cursor: pointer; transition: all .2s; color: var(--muted); white-space: nowrap; }
+  .inst-pay-btn:hover { background: var(--accent); color: #0d0f12; border-color: var(--accent); }
+  .inst-pay-btn.paid { background: var(--bg2); color: var(--muted); border-color: var(--border); cursor: default; }
+  .debt-summary-bar { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 16px; }
+  .dsb-tile { background: var(--bg3); border-radius: 10px; padding: 12px; text-align: center; }
+  .dsb-label { font-family: var(--mono); font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .dsb-val { font-size: 18px; font-weight: 800; letter-spacing: -.5px; }
+
+  /* CHARTS */
+  .mini-chart { height: 60px; display: flex; align-items: flex-end; gap: 4px; margin-top: 12px; }
+  .mini-bar { flex: 1; border-radius: 4px 4px 0 0; min-height: 4px; transition: height .4s ease; position: relative; }
+  .mini-bar:hover::after { content: attr(data-val); position: absolute; top: -22px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 9px; color: var(--text); background: var(--bg3); padding: 2px 5px; border-radius: 4px; white-space: nowrap; }
+
+  /* HEALTH METRICS */
+  .metric-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .metric-tile { background: var(--bg3); border-radius: 10px; padding: 14px; }
+  .mt-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
+  .mt-val { font-size: 24px; font-weight: 800; letter-spacing: -1px; }
+  .mt-unit { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+  /* MOOD */
+  .mood-selector { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .mood-btn { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; cursor: pointer; font-size: 18px; transition: all .2s; }
+  .mood-btn.selected, .mood-btn:hover { border-color: var(--accent); background: rgba(0,229,160,.08); transform: scale(1.1); }
+
+  /* WATER */
+  .water-tracker { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .water-cup { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg3); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: all .2s; filter: grayscale(1); }
+  .water-cup.filled { filter: none; border-color: var(--accent3); background: rgba(91,140,255,.1); }
+
+  /* EMPTY STATE */
+  .empty { text-align: center; padding: 40px 20px; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+  .empty .empty-icon { font-size: 36px; margin-bottom: 10px; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg3); border: 1px solid var(--accent); color: var(--text); padding: 12px 20px; border-radius: 10px; font-family: var(--mono); font-size: 13px; z-index: 999; opacity: 0; transform: translateY(10px); transition: all .3s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* QR MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 18px; padding: 24px; width: 100%; max-width: 480px; }
+  .modal h2 { margin-bottom: 6px; }
+  .modal-sub { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+  #qr-video-wrap { position: relative; border-radius: 12px; overflow: hidden; background: #000; margin-bottom: 14px; }
+  #qr-video { width: 100%; display: block; border-radius: 12px; max-height: 260px; object-fit: cover; }
+  #qr-canvas { display: none; }
+  .qr-corner { position: absolute; width: 28px; height: 28px; border-color: var(--accent); border-style: solid; }
+  .qr-corner.tl { top: 12px; left: 12px; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+  .qr-corner.tr { top: 12px; right: 12px; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+  .qr-corner.bl { bottom: 12px; left: 12px; border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+  .qr-corner.br { bottom: 12px; right: 12px; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+  #qr-status { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 14px; min-height: 18px; }
+
+  /* AI PANEL */
+  .ai-panel { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .ai-result { background: var(--bg2); border: 1px solid var(--accent); border-radius: 10px; padding: 14px; margin-top: 12px; display: none; }
+  .ai-result.show { display: block; }
+  .ai-ex-name { font-size: 16px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .ai-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .ai-chip { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-family: var(--mono); font-size: 11px; color: var(--text); }
+  .ai-desc { font-size: 12px; color: var(--muted); font-family: var(--mono); line-height: 1.5; margin-bottom: 10px; }
+  .ai-loading { display: none; align-items: center; gap: 10px; font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .ai-loading.show { display: flex; }
+  .ai-spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* SETTINGS */
+  .api-key-wrap { position: relative; }
+  .api-key-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px; }
+  .settings-status { font-family: var(--mono); font-size: 11px; margin-top: 6px; }
+
+  /* SCROLL */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* RESPONSIVE */
+  @media(max-width:600px) {
+    .ir-3, .ir-4 { grid-template-columns: 1fr 1fr; }
+    .budget-summary { grid-template-columns: 1fr; }
+    .dash-grid { grid-template-columns: 1fr 1fr; }
+    .nav-brand { font-size: 14px; }
+    .nav-btn { font-size: 10px; padding: 5px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand">Health<span>Hub</span></div>
+  <div class="nav-scroll-wrap">
+    <div class="nav-tabs">
+      <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
+      <button class="nav-btn" onclick="showPage('fitness')">Fitness</button>
+      <button class="nav-btn" onclick="showPage('budget')">Budget</button>
+      <button class="nav-btn" onclick="showPage('meds')">Meds</button>
+      <button class="nav-btn" onclick="showPage('health')">Health</button>
+      <button class="nav-btn" onclick="showPage('settings')" style="margin-left:4px">⚙ Settings</button>
+    </div>
+  </div>
+</nav>
+
+<!-- QR SCANNER MODAL -->
+<div class="modal-overlay" id="qr-modal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h2>Scan QR Code</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeQR()">✕ Close</button>
+    </div>
+    <div class="modal-sub">Point camera at a Planet Fitness machine QR or any text — AI will identify the exercise</div>
+    <div id="qr-video-wrap">
+      <video id="qr-video" autoplay playsinline muted></video>
+      <canvas id="qr-canvas"></canvas>
+      <div class="qr-corner tl"></div>
+      <div class="qr-corner tr"></div>
+      <div class="qr-corner bl"></div>
+      <div class="qr-corner br"></div>
+    </div>
+    <div id="qr-status">Initializing camera...</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="analyzeQRWithAI()">🤖 Analyze with AI</button>
+      <button class="btn btn-ghost btn-sm" onclick="retryQR()">Retry</button>
+    </div>
+    <div id="qr-scanned-val" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:10px;word-break:break-all;"></div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page active">
+  <h1>Dashboard</h1>
+  <p class="sub">Your daily overview — <span id="dash-date"></span></p>
+  <div class="dash-grid" id="dash-tiles"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <h2>Today's Meds</h2>
+      <div id="dash-meds-list"></div>
+    </div>
+    <div class="card">
+      <h2>Recent Workouts</h2>
+      <div id="dash-workouts-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- FITNESS -->
+<div id="page-fitness" class="page">
+  <h1>Fitness</h1>
+  <p class="sub">Track workouts, sets, reps & weight</p>
+
+  <!-- AI WORKOUT ASSISTANT -->
+  <div class="card">
+    <div class="card-header" style="margin-bottom:10px">
+      <h2 style="margin:0">🤖 AI Workout Assistant</h2>
+      <span class="tag tag-purple">Claude AI</span>
+    </div>
+    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px">Type any exercise or machine name — AI auto-fills sets, reps, weight & tips. Or scan a QR code from a machine.</p>
+    <div class="ai-panel">
+      <div style="display:flex;gap:8px">
+        <input id="ai-exercise-input" placeholder="e.g. Chest Press Machine, Cable Row, Leg Press..." style="flex:1" onkeydown="if(event.key==='Enter')askAI()">
+        <button class="btn btn-primary" onclick="askAI()" style="white-space:nowrap">Ask AI</button>
+        <button class="btn btn-ghost" onclick="openQR()" title="Scan QR Code" style="padding:9px 12px">📷</button>
+      </div>
+      <div class="ai-loading" id="ai-loading"><div class="ai-spinner"></div>Analyzing exercise...</div>
+      <div class="ai-result" id="ai-result">
+        <div class="ai-ex-name" id="ai-ex-name"></div>
+        <div class="ai-chips" id="ai-chips"></div>
+        <div class="ai-desc" id="ai-desc"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="fillFromAI()">✓ Use This & Log</button>
+          <button class="btn btn-ghost btn-sm" onclick="askAI()">↺ Regenerate</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MANUAL LOG -->
+  <div class="card">
+    <h2>Log Workout</h2>
+    <div class="input-row ir-2">
+      <div><label>Exercise Name</label><input id="ex-name" placeholder="e.g. Bench Press"></div>
+      <div><label>Category</label>
+        <select id="ex-cat">
+          <option>Strength</option><option>Cardio</option><option>Flexibility</option><option>HIIT</option><option>Sports</option><option>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="input-row ir-4">
+      <div><label>Sets</label><input id="ex-sets" type="number" placeholder="3" min="1"></div>
+      <div><label>Reps</label><input id="ex-reps" type="number" placeholder="10" min="1"></div>
+      <div><label>Weight (lbs)</label><input id="ex-weight" type="number" placeholder="135" min="0"></div>
+      <div><label>Duration (min)</label><input id="ex-dur" type="number" placeholder="45" min="1"></div>
+    </div>
+    <div class="input-row">
+      <div><label>Notes</label><input id="ex-notes" placeholder="Optional notes..."></div>
+    </div>
+    <button class="btn btn-primary" onclick="addWorkout()">+ Log Exercise</button>
+  </div>
+  <div class="card">
+    <div class="card-header"><h2 style="margin:0">Workout Log</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="fit-filter" onchange="renderWorkouts()" style="width:auto;padding:5px 10px;font-size:12px">
+          <option value="all">All Time</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+        </select>
+      </div>
+    </div>
+    <div id="workout-list"></div>
+  </div>
+</div>
+
+<!-- BUDGET -->
+<div id="page-budget" class="page">
+  <h1>Budget</h1>
+  <p class="sub" id="budget-week-label">Weekly budget tracker</p>
+
+  <!-- FREE CASH HERO -->
+  <div class="free-cash-hero">
+    <div class="free-cash-label">💵 Free to Spend</div>
+    <div class="free-cash-amount" id="free-cash">$0</div>
+    <div class="free-cash-sub" id="free-cash-sub">after bills · this week</div>
+  </div>
+
+  <!-- STATS ROW -->
+  <div class="budget-stats">
+    <div class="bstat"><div class="bstat-label">This Week</div><div class="bstat-val" id="b-week-check" style="color:var(--accent)">$0</div></div>
+    <div class="bstat"><div class="bstat-label">Spent</div><div class="bstat-val" id="b-week-spent" style="color:var(--danger)">$0</div></div>
+    <div class="bstat"><div class="bstat-label">Bills Due</div><div class="bstat-val" id="b-bills-due" style="color:var(--accent2)">$0</div></div>
+  </div>
+
+  <!-- BUDGET TABS -->
+  <div class="budget-tabs">
+    <div class="budget-tab active" onclick="switchBudgetTab('overview',this)">Overview</div>
+    <div class="budget-tab" onclick="switchBudgetTab('envelopes',this)">Categories</div>
+    <div class="budget-tab" onclick="switchBudgetTab('bills',this)">Bills</div>
+    <div class="budget-tab" onclick="switchBudgetTab('transactions',this)">Transactions</div>
+    <div class="budget-tab" onclick="switchBudgetTab('goals',this)">Goals</div>
+    <div class="budget-tab" onclick="switchBudgetTab('gray',this)">Gray</div>
+    <div class="budget-tab" onclick="switchBudgetTab('debts',this)">Debts</div>
+    <div class="budget-tab" onclick="switchBudgetTab('setup',this)">Setup</div>
+  </div>
+
+  <!-- OVERVIEW TAB -->
+  <div id="btab-overview" class="btab">
+    <div class="card">
+      <h2>Spending Breakdown</h2>
+      <div class="donut-wrap">
+        <canvas id="donut-canvas" width="120" height="120" class="donut-svg"></canvas>
+        <div class="donut-legend" id="donut-legend"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Upcoming Bills</h2>
+      <div id="overview-bills"></div>
+    </div>
+    <div class="card">
+      <div class="card-header" style="margin-bottom:10px">
+        <h2 style="margin:0">Recent Transactions</h2>
+        <button class="btn btn-ghost btn-sm" onclick="switchBudgetTab('transactions', document.querySelector('.budget-tab:nth-child(4)'))">See all</button>
+      </div>
+      <div id="overview-recent-tx"></div>
+    </div>
+  </div>
+
+  <!-- CATEGORIES TAB -->
+  <div id="btab-envelopes" class="btab" style="display:none">
+    <div class="card">
+      <div class="card-header" style="margin-bottom:12px">
+        <h2 style="margin:0">Spending Categories</h2>
+        <button class="btn btn-ghost btn-sm" onclick="openEnvModal()">+ New</button>
+      </div>
+      <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px">Tap a category to quickly log an expense against it</p>
+      <div class="envelope-grid" id="envelope-grid"></div>
+    </div>
+    <!-- Quick log against envelope -->
+    <div class="card" id="env-quick-log" style="display:none">
+      <h2 id="env-quick-title">Log Expense</h2>
+      <div class="input-row ir-2">
+        <div><label>Merchant / Description</label><input id="env-tx-desc" placeholder="e.g. Walmart"></div>
+        <div><label>Amount ($)</label><input id="env-tx-amount" type="number" placeholder="0.00" min="0" step="0.01"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="logEnvelopeExpense()">Log Expense</button>
+        <button class="btn btn-ghost" onclick="closeEnvQuickLog()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BILLS TAB -->
+  <div id="btab-bills" class="btab" style="display:none">
+    <div class="card">
+      <h2>Add Recurring Bill</h2>
+      <div class="input-row ir-2">
+        <div><label>Bill Name</label><input id="bill-name" placeholder="e.g. Spectrum Internet"></div>
+        <div><label>Amount ($)</label><input id="bill-amount" type="number" placeholder="0.00" step="0.01"></div>
+      </div>
+      <div class="input-row ir-2">
+        <div><label>Due Day of Month</label><input id="bill-day" type="number" min="1" max="31" placeholder="15"></div>
+        <div><label>Category</label>
+          <select id="bill-cat">
+            <option>Housing / Rent</option><option>Electric</option><option>Internet</option>
+            <option>Phone</option><option>Car Insurance</option><option>Renters Insurance</option>
+            <option>Subscriptions</option><option>Transportation</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addBill()">+ Add Bill</button>
+    </div>
+    <div class="card">
+      <h2>Your Bills</h2>
+      <div id="bills-list"></div>
+    </div>
+  </div>
+
+  <!-- TRANSACTIONS TAB -->
+  <div id="btab-transactions" class="btab" style="display:none">
+    <div class="card">
+      <h2>Quick Add</h2>
+      <div class="quick-add" id="merchant-chips"></div>
+      <div class="input-row ir-2">
+        <div><label>Merchant / Description</label><input id="tx-desc" placeholder="e.g. Walmart, Shell, CVS" oninput="txDescInput(this)"></div>
+        <div><label>Amount ($)</label><input id="tx-amount" type="number" placeholder="0.00" min="0" step="0.01"></div>
+      </div>
+      <div class="input-row ir-3">
+        <div><label>Type</label>
+          <select id="tx-type" onchange="txTypeChange()">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </div>
+        <div><label>Category</label>
+          <select id="tx-cat">
+            <optgroup label="— Food —">
+              <option>Groceries</option><option>Fast Food</option><option>Restaurants</option>
+            </optgroup>
+            <optgroup label="— Home —">
+              <option>Housing / Rent</option><option>Electric</option><option>Internet</option><option>Household Supplies</option>
+            </optgroup>
+            <optgroup label="— Transport —">
+              <option>Gas</option><option>Transportation</option><option>Car Insurance</option>
+            </optgroup>
+            <optgroup label="— Bills —">
+              <option>Phone</option><option>Renters Insurance</option><option>Subscriptions</option>
+            </optgroup>
+            <optgroup label="— Personal —">
+              <option>Personal Care</option><option>Clothing</option><option>Medical / Pharmacy</option><option>Health</option>
+            </optgroup>
+            <optgroup label="— Gray —">
+              <option>Gray — Food</option><option>Gray — Clothing</option><option>Gray — School</option>
+              <option>Gray — Activities</option><option>Gray — Other</option>
+            </optgroup>
+            <optgroup label="— Other —">
+              <option>Entertainment</option><option>Amazon / Online</option><option>Shopping</option>
+              <option>Fees &amp; Interest</option><option>Savings</option><option>Other</option>
+            </optgroup>
+            <optgroup label="— Income —">
+              <option>Unemployment</option><option>Other Income</option>
+            </optgroup>
+          </select>
+        </div>
+        <div><label>Date</label><input id="tx-date" type="date"></div>
+      </div>
+      <button class="btn btn-primary" onclick="addTransaction()">+ Add Transaction</button>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h2 style="margin:0">All Transactions</h2>
+        <select id="budget-filter" onchange="renderBudget()" style="width:auto;padding:5px 10px;font-size:12px">
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="all">All Time</option>
+        </select>
+      </div>
+      <div class="tx-list" id="tx-list"></div>
+    </div>
+  </div>
+
+  <!-- GOALS TAB -->
+  <div id="btab-goals" class="btab" style="display:none">
+    <div class="card">
+      <h2>Add Savings Goal</h2>
+      <div class="input-row ir-2">
+        <div><label>Goal Name</label><input id="goal-name" placeholder="e.g. Emergency Fund, New Laptop"></div>
+        <div><label>Target Amount ($)</label><input id="goal-target" type="number" placeholder="500" min="1"></div>
+      </div>
+      <button class="btn btn-primary" onclick="addGoal()">+ Add Goal</button>
+    </div>
+    <div class="card">
+      <h2>Your Goals</h2>
+      <div id="goals-list"></div>
+      <div id="goals-contribute" style="display:none;margin-top:14px">
+        <hr class="divider">
+        <h2 id="contribute-title">Add to Goal</h2>
+        <div style="display:flex;gap:8px">
+          <input id="contribute-amount" type="number" placeholder="Amount to add" min="0" step="0.01" style="flex:1">
+          <button class="btn btn-primary" onclick="contributeToGoal()">Add</button>
+          <button class="btn btn-ghost" onclick="closeContribute()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEBTS TAB -->
+  <div id="btab-debts" class="btab" style="display:none">
+
+    <!-- Summary bar -->
+    <div class="debt-summary-bar">
+      <div class="dsb-tile"><div class="dsb-label">Total Owed</div><div class="dsb-val" id="debt-total-owed" style="color:var(--danger)">$0</div></div>
+      <div class="dsb-tile"><div class="dsb-label">Due This Week</div><div class="dsb-val" id="debt-due-week" style="color:var(--accent2)">$0</div></div>
+      <div class="dsb-tile"><div class="dsb-label">Fees Paid</div><div class="dsb-val" id="debt-fees-paid" style="color:var(--muted)">$0</div></div>
+    </div>
+
+    <!-- Type selector -->
+    <div class="debt-type-tabs" id="debt-type-tabs">
+      <div class="debt-type-tab active" onclick="selectDebtType('advance',this)">
+        <div class="dtt-icon">📲</div>
+        <div class="dtt-label">Cash Advance</div>
+        <div class="dtt-sub">Dave · Albert</div>
+      </div>
+      <div class="debt-type-tab" onclick="selectDebtType('arrangement',this)">
+        <div class="dtt-icon">📱</div>
+        <div class="dtt-label">Pay Arrangement</div>
+        <div class="dtt-sub">Split bill in 2</div>
+      </div>
+      <div class="debt-type-tab" onclick="selectDebtType('bnpl',this)">
+        <div class="dtt-icon">🛒</div>
+        <div class="dtt-label">Buy Now Pay Later</div>
+        <div class="dtt-sub">Four · Klarna</div>
+      </div>
+    </div>
+
+    <!-- CASH ADVANCE FORM -->
+    <div id="debt-form-advance" class="card">
+      <h2>📲 Log Cash Advance</h2>
+      <div class="input-row ir-2">
+        <div><label>App / Source</label>
+          <select id="adv-source">
+            <option>Dave</option><option>Albert</option><option>Earnin</option>
+            <option>Brigit</option><option>MoneyLion</option><option>Other</option>
+          </select>
+        </div>
+        <div><label>Borrow Amount ($)</label><input id="adv-amount" type="number" placeholder="75.00" step="0.01" min="1" oninput="calcAdvanceRepay()"></div>
+      </div>
+      <div class="input-row ir-3">
+        <div><label>Fee / Tip ($)</label><input id="adv-fee" type="number" placeholder="5.00" step="0.01" min="0" oninput="calcAdvanceRepay()"></div>
+        <div><label>Repay Date</label><input id="adv-repay-date" type="date"></div>
+        <div>
+          <label>Total Repayment</label>
+          <div id="adv-repay-total" style="font-family:var(--mono);font-size:18px;font-weight:800;color:var(--accent2);padding:9px 0">$0.00</div>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addAdvance()">+ Log Advance</button>
+      <p style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px">Borrow amount will be logged as income · Repayment logged as expense when paid</p>
+    </div>
+
+    <!-- PAYMENT ARRANGEMENT FORM -->
+    <div id="debt-form-arrangement" class="card" style="display:none">
+      <h2>📱 Log Payment Arrangement</h2>
+      <div class="input-row ir-2">
+        <div><label>Company / Bill</label><input id="arr-company" placeholder="e.g. T-Mobile, Verizon"></div>
+        <div><label>Full Bill Amount ($)</label><input id="arr-total" type="number" placeholder="120.00" step="0.01" min="1" oninput="calcArrangement()"></div>
+      </div>
+      <div class="input-row ir-2">
+        <div><label>Number of Payments</label>
+          <select id="arr-payments" onchange="calcArrangement()">
+            <option value="2">2 payments</option>
+            <option value="3">3 payments</option>
+            <option value="4">4 payments</option>
+          </select>
+        </div>
+        <div><label>First Payment Due</label><input id="arr-first-date" type="date"></div>
+      </div>
+      <div class="input-row ir-2">
+        <div><label>Payment Interval</label>
+          <select id="arr-interval">
+            <option value="7">Weekly</option>
+            <option value="14">Biweekly</option>
+            <option value="30">Monthly</option>
+          </select>
+        </div>
+        <div>
+          <label>Each Payment</label>
+          <div id="arr-each-payment" style="font-family:var(--mono);font-size:18px;font-weight:800;color:var(--accent3);padding:9px 0">$0.00</div>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addArrangement()">+ Log Arrangement</button>
+    </div>
+
+    <!-- BNPL FORM -->
+    <div id="debt-form-bnpl" class="card" style="display:none">
+      <h2>🛒 Log Buy Now Pay Later</h2>
+      <div class="input-row ir-2">
+        <div><label>App / Store</label>
+          <select id="bnpl-source">
+            <option>Four</option><option>Klarna</option><option>Afterpay</option>
+            <option>Affirm</option><option>Zip</option><option>Other</option>
+          </select>
+        </div>
+        <div><label>Purchase Description</label><input id="bnpl-desc" placeholder="e.g. Nike Shoes, Walmart"></div>
+      </div>
+      <div class="input-row ir-2">
+        <div><label>Total Purchase ($)</label><input id="bnpl-total" type="number" placeholder="80.00" step="0.01" min="1" oninput="calcBNPL()"></div>
+        <div><label>Today's Date (Payment 1 due now)</label><input id="bnpl-start-date" type="date"></div>
+      </div>
+      <div class="input-row ir-2">
+        <div><label>Remaining Payments Interval</label>
+          <select id="bnpl-interval">
+            <option value="14">Biweekly (every 2 weeks)</option>
+            <option value="7">Weekly</option>
+            <option value="30">Monthly</option>
+          </select>
+        </div>
+        <div>
+          <label>Each of 4 Payments</label>
+          <div id="bnpl-each" style="font-family:var(--mono);font-size:18px;font-weight:800;color:var(--accent4);padding:9px 0">$0.00</div>
+        </div>
+      </div>
+      <div id="bnpl-schedule-preview" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.8"></div>
+      <button class="btn btn-primary" onclick="addBNPL()">+ Log Purchase</button>
+      <p style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px">First payment (25%) is due today · remaining 3 are scheduled automatically</p>
+    </div>
+
+    <!-- ACTIVE DEBTS LIST -->
+    <div class="card">
+      <div class="card-header" style="margin-bottom:12px">
+        <h2 style="margin:0">Active Debts</h2>
+        <label style="display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0">
+          <input type="checkbox" id="show-settled" onchange="renderDebts()" style="width:auto"> Show settled
+        </label>
+      </div>
+      <div id="debts-list"></div>
+    </div>
+  </div>
+
+  <!-- GRAY TAB -->
+  <div id="btab-gray" class="btab" style="display:none">
+
+    <!-- Gray summary hero -->
+    <div style="background:linear-gradient(135deg,#0d1225 0%,#150d25 100%);border:1px solid rgba(199,125,255,.2);border-radius:var(--card-r);padding:20px;margin-bottom:16px;position:relative;overflow:hidden">
+      <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(199,125,255,.07) 0%,transparent 70%)"></div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Gray — This Week</div>
+      <div style="font-size:42px;font-weight:800;letter-spacing:-2px;color:var(--accent4)" id="gray-total-week">$0</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--muted)" id="gray-total-month-sub">$0 this month total</div>
+    </div>
+
+    <!-- Gray category tiles -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px" id="gray-cat-tiles"></div>
+
+    <!-- Log expense for Gray -->
+    <div class="card">
+      <h2>Log Expense for Gray</h2>
+      <div class="input-row ir-2">
+        <div><label>Description</label><input id="gray-desc" placeholder="e.g. McDonald's, Target shoes"></div>
+        <div><label>Amount ($)</label><input id="gray-amount" type="number" placeholder="0.00" step="0.01" min="0"></div>
+      </div>
+      <div class="input-row ir-2">
+        <div><label>Category</label>
+          <select id="gray-cat">
+            <option value="Gray — Food">Food</option>
+            <option value="Gray — Clothing">Clothing</option>
+            <option value="Gray — School">School</option>
+            <option value="Gray — Activities">Activities</option>
+            <option value="Gray — Other">Other</option>
+          </select>
+        </div>
+        <div><label>Date</label><input id="gray-date" type="date"></div>
+      </div>
+      <button class="btn btn-primary" onclick="addGrayExpense()">+ Log for Gray</button>
+    </div>
+
+    <!-- Gray transaction history -->
+    <div class="card">
+      <div class="card-header">
+        <h2 style="margin:0">Gray's History</h2>
+        <select id="gray-filter" onchange="renderGray()" style="width:auto;padding:5px 10px;font-size:12px">
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="all">All Time</option>
+        </select>
+      </div>
+      <div id="gray-tx-list"></div>
+    </div>
+  </div>
+
+  <!-- SETUP TAB -->
+  <div id="btab-setup" class="btab" style="display:none">
+    <div class="card">
+      <h2>💵 Weekly Check Setup</h2>
+      <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:14px">Tell the app when your unemployment check arrives and how much — it'll auto-log it each week.</p>
+      <div class="input-row ir-2">
+        <div><label>Check Amount ($)</label><input id="setup-check-amt" type="number" placeholder="0.00" step="0.01"></div>
+        <div><label>Arrives on</label>
+          <select id="setup-check-day">
+            <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option>
+            <option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveCheckSetup()">Save Setup</button>
+      <div id="setup-status" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CATEGORY MODAL -->
+<div class="modal-overlay" id="env-modal">
+  <div class="env-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">New Category</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeEnvModal()">✕</button>
+    </div>
+    <div class="input-row ir-2">
+      <div><label>Name</label><input id="env-name" placeholder="e.g. Groceries"></div>
+      <div><label>Weekly Budget ($)</label><input id="env-budget" type="number" placeholder="100" min="0"></div>
+    </div>
+    <div><label>Emoji</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        🍔🚗🏠💊🎮🛍️⚡👕✂️🐶🎵☕ 
+      </div>
+      <input id="env-emoji" placeholder="Paste emoji e.g. 🍔" style="max-width:120px">
+    </div>
+    <button class="btn btn-primary" onclick="saveEnvelope()" style="margin-top:10px;width:100%">Create Category</button>
+  </div>
+</div>
+
+<!-- MEDS & SUPPLEMENTS -->
+<div id="page-meds" class="page">
+  <h1>Meds & Supplements</h1>
+  <p class="sub">Daily tracking with streaks</p>
+  <div class="card">
+    <h2>Add Med / Supplement</h2>
+    <div class="input-row ir-3">
+      <div><label>Name</label><input id="med-name" placeholder="e.g. Vitamin D3"></div>
+      <div><label>Dose</label><input id="med-dose" placeholder="e.g. 2000 IU"></div>
+      <div><label>Time</label>
+        <select id="med-time">
+          <option>Morning</option><option>Afternoon</option><option>Evening</option><option>Bedtime</option><option>With Food</option><option>As Needed</option>
+        </select>
+      </div>
+    </div>
+    <div class="input-row ir-2">
+      <div><label>Type</label>
+        <select id="med-type">
+          <option value="supplement">Supplement</option>
+          <option value="medication">Medication</option>
+          <option value="vitamin">Vitamin</option>
+          <option value="probiotic">Probiotic</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div><label>Notes</label><input id="med-notes" placeholder="Optional notes..."></div>
+    </div>
+    <button class="btn btn-primary" onclick="addMed()">+ Add to Tracker</button>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <h2 style="margin:0">Today — <span id="med-today-date"></span></h2>
+      <button class="btn btn-ghost btn-sm" onclick="resetDayMeds()">Reset Day</button>
+    </div>
+    <div class="med-grid" id="med-grid"></div>
+  </div>
+  <div class="card">
+    <h2>All Entries</h2>
+    <div id="med-all-list"></div>
+  </div>
+</div>
+
+<!-- HEALTH METRICS -->
+<div id="page-health" class="page">
+  <h1>Health Metrics</h1>
+  <p class="sub">Weight, sleep, water, mood & more</p>
+
+  <!-- Quick Log -->
+  <div class="card">
+    <h2>Log Today</h2>
+    <div class="input-row ir-3">
+      <div><label>Weight (lbs)</label><input id="h-weight" type="number" placeholder="175" step="0.1"></div>
+      <div><label>Sleep (hrs)</label><input id="h-sleep" type="number" placeholder="7.5" step="0.5" min="0" max="24"></div>
+      <div><label>Steps</label><input id="h-steps" type="number" placeholder="8000" min="0"></div>
+    </div>
+    <div class="input-row ir-2">
+      <div><label>Blood Pressure (sys/dia)</label><input id="h-bp" placeholder="120/80"></div>
+      <div><label>Resting HR (bpm)</label><input id="h-hr" type="number" placeholder="65" min="30" max="220"></div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label>Mood</label>
+      <div class="mood-selector" id="mood-selector">
+        <button class="mood-btn" data-mood="😄" onclick="selectMood(this)">😄</button>
+        <button class="mood-btn" data-mood="🙂" onclick="selectMood(this)">🙂</button>
+        <button class="mood-btn" data-mood="😐" onclick="selectMood(this)">😐</button>
+        <button class="mood-btn" data-mood="😔" onclick="selectMood(this)">😔</button>
+        <button class="mood-btn" data-mood="😤" onclick="selectMood(this)">😤</button>
+        <button class="mood-btn" data-mood="😴" onclick="selectMood(this)">😴</button>
+        <button class="mood-btn" data-mood="🤒" onclick="selectMood(this)">🤒</button>
+      </div>
+    </div>
+    <div style="margin-bottom:16px">
+      <label>Water Intake (glasses — click to fill)</label>
+      <div class="water-tracker" id="water-tracker"></div>
+    </div>
+    <div><label>Notes</label><textarea id="h-notes" placeholder="How are you feeling? Any symptoms?"></textarea></div>
+    <button class="btn btn-primary" onclick="logHealth()" style="margin-top:10px">+ Save Entry</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="metric-row" id="health-stats"></div>
+
+  <!-- History -->
+  <div class="card">
+    <h2>History</h2>
+    <div id="health-history"></div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="page-settings" class="page">
+  <h1>Settings</h1>
+  <p class="sub">Configure AI features and app preferences</p>
+  <div class="card">
+    <h2>🤖 Anthropic API Key</h2>
+    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:14px">Required for the AI Workout Assistant. Get your key at <strong style="color:var(--accent)">console.anthropic.com</strong> → API Keys. Your key is stored locally in your browser only — never sent anywhere except Anthropic's API.</p>
+    <div class="api-key-wrap">
+      <label>API Key</label>
+      <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off">
+      <button class="api-key-toggle" onclick="toggleKeyVisibility()" id="key-toggle">👁</button>
+    </div>
+    <div class="settings-status" id="api-status"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary" onclick="saveAPIKey()">Save Key</button>
+      <button class="btn btn-ghost" onclick="testAPIKey()">Test Connection</button>
+      <button class="btn btn-danger btn-sm" onclick="clearAPIKey()">Clear</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>📦 Data Management</h2>
+    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:14px">All data is stored in your browser's localStorage. Export to back it up.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="exportData()">⬇ Export JSON</button>
+      <button class="btn btn-ghost" onclick="importData()">⬆ Import JSON</button>
+      <button class="btn btn-danger" onclick="nukeData()">🗑 Clear All Data</button>
+    </div>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
+  </div>
+  <div class="card">
+    <h2>ℹ About</h2>
+    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
+      <strong style="color:var(--text)">Health Hub</strong> — local-first personal health tracker<br>
+      No account required · No data leaves your device (except AI calls to Anthropic)<br>
+      Built as a single HTML file · Works offline after first load
+    </p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== STATE =====
+const DB = {
+  workouts: [],
+  transactions: [],
+  meds: [],
+  medLog: {},      // { "YYYY-MM-DD": { medId: true } }
+  healthLog: [],
+};
+
+let selectedMood = '';
+let waterGlasses = 0;
+const WATER_GOAL = 8;
+
+// ===== PERSISTENCE =====
+function save() { localStorage.setItem('healthhub_v2', JSON.stringify(DB)); }
+function load() {
+  const d = localStorage.getItem('healthhub_v2');
+  if (d) { try { Object.assign(DB, JSON.parse(d)); } catch(e){} }
+}
+
+// ===== UTILS =====
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function today() { return new Date().toISOString().slice(0,10); }
+function fmt(d) { return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+function fmtMoney(n) { return '$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  event.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  renderPage(id);
+}
+function renderPage(id) {
+  if(id==='dashboard') renderDashboard();
+  if(id==='fitness') renderWorkouts();
+  if(id==='budget') { initBudgetDB(); renderBudget(); }
+  if(id==='meds') renderMeds();
+  if(id==='health') renderHealth();
+  if(id==='settings') renderSettings();
+}
+
+// ===== FITNESS =====
+function addWorkout() {
+  const name = document.getElementById('ex-name').value.trim();
+  if(!name) { toast('Enter an exercise name'); return; }
+  DB.workouts.unshift({
+    id: uid(), name,
+    cat: document.getElementById('ex-cat').value,
+    sets: document.getElementById('ex-sets').value || '',
+    reps: document.getElementById('ex-reps').value || '',
+    weight: document.getElementById('ex-weight').value || '',
+    dur: document.getElementById('ex-dur').value || '',
+    notes: document.getElementById('ex-notes').value.trim(),
+    date: today()
+  });
+  save(); toast('Workout logged ✓');
+  ['ex-name','ex-sets','ex-reps','ex-weight','ex-dur','ex-notes'].forEach(id => document.getElementById(id).value='');
+  renderWorkouts();
+}
+
+function deleteWorkout(id) {
+  DB.workouts = DB.workouts.filter(w => w.id !== id);
+  save(); renderWorkouts();
+}
+
+function filterItems(items, range, dateKey='date') {
+  if(range==='all') return items;
+  const now = new Date();
+  return items.filter(i => {
+    const d = new Date(i[dateKey]);
+    if(range==='week') { const s=new Date(now); s.setDate(s.getDate()-7); return d>=s; }
+    if(range==='month') { return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); }
+    return true;
+  });
+}
+
+function renderWorkouts() {
+  const range = document.getElementById('fit-filter')?.value||'all';
+  const items = filterItems(DB.workouts, range);
+  const el = document.getElementById('workout-list');
+  if(!items.length) { el.innerHTML='<div class="empty"><div class="empty-icon">🏋️</div>No workouts yet. Log your first one above!</div>'; return; }
+  const catColors = {Strength:'green',Cardio:'orange',Flexibility:'blue',HIIT:'red',Sports:'purple',Other:'blue'};
+  el.innerHTML = items.map(w => `
+    <div class="list-item">
+      <div class="li-icon" style="background:var(--bg3)">🏋️</div>
+      <div class="li-body">
+        <div class="li-title">${w.name} <span class="tag tag-${catColors[w.cat]||'blue'}">${w.cat}</span></div>
+        <div class="li-meta">${[w.sets&&w.sets+'sets', w.reps&&w.reps+'reps', w.weight&&w.weight+'lbs', w.dur&&w.dur+'min'].filter(Boolean).join(' · ')} · ${fmt(w.date)}</div>
+        ${w.notes?`<div class="li-meta" style="margin-top:2px;color:var(--muted)">${w.notes}</div>`:''}
+      </div>
+      <div class="li-actions"><button class="btn btn-danger btn-sm" onclick="deleteWorkout('${w.id}')">✕</button></div>
+    </div>`).join('');
+}
+
+// ===== BUDGET =====
+// DB additions needed: envelopes, bills, goals, checkSetup, merchantMemory
+function initBudgetDB() {
+  if(!DB.envelopes) DB.envelopes = [
+    {id:'env1', name:'Groceries', emoji:'🛒', budget:100},
+    {id:'env2', name:'Gas', emoji:'⛽', budget:60},
+    {id:'env3', name:'Fast Food', emoji:'🍟', budget:40},
+    {id:'env4', name:'Personal Care', emoji:'✂️', budget:30},
+    {id:'env5', name:'Entertainment', emoji:'🎮', budget:20},
+  ];
+  if(!DB.bills) DB.bills = [];
+  if(!DB.goals) DB.goals = [];
+  if(!DB.checkSetup) DB.checkSetup = { amount: 0, dayOfWeek: 4 }; // Thursday default
+  if(!DB.merchantMemory) DB.merchantMemory = {}; // {desc: category}
+}
+
+function getWeekStart(d) {
+  const dt = d ? new Date(d+'T00:00:00') : new Date();
+  const day = dt.getDay();
+  const diff = dt.getDate() - day;
+  const s = new Date(dt); s.setDate(diff); return s.toISOString().slice(0,10);
+}
+function getWeekEnd(d) {
+  const s = new Date(getWeekStart(d)+'T00:00:00');
+  s.setDate(s.getDate()+6); return s.toISOString().slice(0,10);
+}
+function isThisWeek(dateStr) {
+  return dateStr >= getWeekStart() && dateStr <= getWeekEnd();
+}
+
+// Auto-log weekly check if not already logged this week
+function autoLogWeeklyCheck() {
+  const setup = DB.checkSetup;
+  if(!setup.amount || setup.amount <= 0) return;
+  const ws = getWeekStart();
+  const alreadyLogged = DB.transactions.some(t =>
+    t.type === 'income' && t.cat === 'Unemployment' && t.date >= ws && t.date <= getWeekEnd()
+  );
+  if(!alreadyLogged) {
+    // Check if today is on or after the check day this week
+    const todayDow = new Date().getDay();
+    if(todayDow >= parseInt(setup.dayOfWeek)) {
+      DB.transactions.unshift({
+        id: uid(), desc: 'Weekly Unemployment Check',
+        amount: setup.amount, type: 'income', cat: 'Unemployment',
+        date: ws, autoLogged: true
+      });
+      save();
+    }
+  }
+}
+
+function switchBudgetTab(tab, el) {
+  document.querySelectorAll('.btab').forEach(t => t.style.display='none');
+  document.querySelectorAll('.budget-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('btab-'+tab).style.display = 'block';
+  if(el) el.classList.add('active');
+  renderBudget();
+}
+
+function renderBudget() {
+  initBudgetDB();
+  autoLogWeeklyCheck();
+
+  const allTx = DB.transactions;
+  const weekTx = allTx.filter(t => isThisWeek(t.date));
+  const weekIncome = weekTx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const weekSpent = weekTx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+
+  // Bills due this month
+  const now = new Date();
+  const billsDue = DB.bills.reduce((s,b) => {
+    const paid = b.paidMonths && b.paidMonths.includes(now.getFullYear()+'-'+(now.getMonth()+1));
+    return s + (paid ? 0 : b.amount);
+  }, 0);
+  // Debts due this week (unpaid installments)
+  initDebtDB();
+  const debtsDueWeek = DB.debts.filter(d=>!d.settled).reduce((s,d) => {
+    return s + d.installments.filter(i=>!i.paid && isThisWeek(i.dueDate)).reduce((ss,i)=>ss+i.amount,0);
+  }, 0);
+  const freeCash = weekIncome - weekSpent - debtsDueWeek;
+  const spendRatio = weekIncome > 0 ? weekSpent / weekIncome : 0;
+
+  const grayWeekSpent = weekTx.filter(t=>t.type==='expense' && t.cat?.startsWith('Gray — ')).reduce((s,t)=>s+t.amount,0);
+  const myWeekSpent = weekSpent - grayWeekSpent;
+
+  // Reactive color helper
+  // For "good is high" (income, free cash): green if positive, yellow if low, red if negative
+  // For "good is low" (spent, bills due): green if low ratio, yellow if getting high, red if over
+  function cashColor(val) {
+    if(val < 0) return 'var(--danger)';
+    if(val < 20) return 'var(--accent2)';
+    return 'var(--accent)';
+  }
+  function spendColor(spent, budget) {
+    if(!budget) return 'var(--text)';
+    const r = spent / budget;
+    if(r >= 1) return 'var(--danger)';
+    if(r >= 0.8) return 'var(--accent2)';
+    return 'var(--accent)';
+  }
+
+  // Hero — reactive on free cash
+  const fcEl = document.getElementById('free-cash');
+  if(fcEl) {
+    fcEl.textContent = fmtMoney(freeCash);
+    fcEl.className = 'free-cash-amount';
+    fcEl.style.color = cashColor(freeCash);
+  }
+  const ws = getWeekStart(), we = getWeekEnd();
+  const subEl = document.getElementById('free-cash-sub');
+  if(subEl) subEl.textContent = `after bills · ${fmtMoney(myWeekSpent)} you · ${fmtMoney(grayWeekSpent)} Gray`;
+
+  // Stats row — reactive colors
+  const setElColor = (id, val, color) => {
+    const e = document.getElementById(id);
+    if(e) { e.textContent = val; e.style.color = color; }
+  };
+  setElColor('b-week-check', fmtMoney(weekIncome), weekIncome > 0 ? 'var(--accent)' : 'var(--muted)');
+  setElColor('b-week-spent', fmtMoney(weekSpent), spendColor(weekSpent, weekIncome));
+  // Bills due: red if overdue bills exist, yellow if any due within 3 days, green if all paid
+  const hasOverdueBill = DB.bills.some(b => {
+    const paid = b.paidMonths?.includes(now.getFullYear()+'-'+(now.getMonth()+1));
+    return !paid && b.day < now.getDate();
+  });
+  const hasSoonBill = DB.bills.some(b => {
+    const paid = b.paidMonths?.includes(now.getFullYear()+'-'+(now.getMonth()+1));
+    const daysUntil = b.day - now.getDate();
+    return !paid && daysUntil >= 0 && daysUntil <= 3;
+  });
+  setElColor('b-bills-due', fmtMoney(billsDue),
+    hasOverdueBill ? 'var(--danger)' : hasSoonBill ? 'var(--accent2)' : billsDue > 0 ? 'var(--text)' : 'var(--accent)');
+
+  // Render sub-sections
+  renderDonut(weekTx);
+  renderOverviewBills();
+  renderOverviewRecentTx();
+  renderEnvelopes();
+  renderBillsList();
+  renderTxList();
+  renderGoals();
+  renderDebts();
+  renderGray();
+  renderMerchantChips();
+  renderSetupTab();
+}
+
+// DONUT CHART
+function renderDonut(weekTx) {
+  const canvas = document.getElementById('donut-canvas');
+  if(!canvas) return;
+  const expenses = weekTx.filter(t=>t.type==='expense');
+  const cats = {};
+  expenses.forEach(t => { cats[t.cat] = (cats[t.cat]||0) + t.amount; });
+  const total = Object.values(cats).reduce((s,v)=>s+v,0);
+  const colors = ['#00e5a0','#ff6b35','#5b8cff','#c77dff','#ff4757','#ffd32a','#17c0eb','#0be881'];
+  const entries = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,120,120);
+  if(!entries.length) {
+    ctx.beginPath(); ctx.arc(60,60,40,0,Math.PI*2);
+    ctx.strokeStyle='#242830'; ctx.lineWidth=16; ctx.stroke();
+    const legend = document.getElementById('donut-legend');
+    if(legend) legend.innerHTML = '<span style="font-family:var(--mono);font-size:11px;color:var(--muted)">No expenses yet</span>';
+    return;
+  }
+  let startAngle = -Math.PI/2;
+  entries.forEach(([cat,amt],i) => {
+    const slice = (amt/total)*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(60,60);
+    ctx.arc(60,60,48,startAngle,startAngle+slice);
+    ctx.fillStyle = colors[i%colors.length]; ctx.fill();
+    startAngle += slice;
+  });
+  // Inner hole
+  ctx.beginPath(); ctx.arc(60,60,30,0,Math.PI*2);
+  ctx.fillStyle='#13161b'; ctx.fill();
+  // Center text
+  ctx.fillStyle='#e8eaf0'; ctx.font='700 11px Syne,sans-serif'; ctx.textAlign='center';
+  ctx.fillText(fmtMoney(total).replace('.00',''), 60, 57);
+  ctx.fillStyle='#6b7280'; ctx.font='9px DM Mono,monospace';
+  ctx.fillText('spent', 60, 69);
+
+  const legend = document.getElementById('donut-legend');
+  if(legend) legend.innerHTML = entries.map(([cat,amt],i)=>`
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${colors[i%colors.length]}"></div>
+      <span style="color:var(--muted)">${cat}</span>
+      <span style="margin-left:auto;font-weight:700">${fmtMoney(amt)}</span>
+    </div>`).join('');
+}
+
+function renderOverviewBills() {
+  const el = document.getElementById('overview-bills');
+  if(!el) return;
+  const now = new Date();
+  const upcoming = DB.bills.filter(b => {
+    const paid = b.paidMonths?.includes(now.getFullYear()+'-'+(now.getMonth()+1));
+    return !paid;
+  }).sort((a,b)=>a.day-b.day).slice(0,4);
+  if(!upcoming.length) { el.innerHTML='<div class="empty" style="padding:14px 0"><div class="empty-icon" style="font-size:22px">✅</div>All bills paid!</div>'; return; }
+  el.innerHTML = upcoming.map(b => billItemHTML(b)).join('');
+}
+
+function renderOverviewRecentTx() {
+  const el = document.getElementById('overview-recent-tx');
+  if(!el) return;
+  const recent = DB.transactions.slice(0,5);
+  if(!recent.length) { el.innerHTML='<div class="empty" style="padding:12px 0">No transactions yet</div>'; return; }
+  el.innerHTML = recent.map(t => txItemHTML(t)).join('');
+}
+
+// ENVELOPES
+function renderEnvelopes() {
+  const grid = document.getElementById('envelope-grid');
+  if(!grid) return;
+  const ws = getWeekStart();
+  const we = getWeekEnd();
+  const catColors = ['#00e5a0','#ff6b35','#5b8cff','#c77dff','#ffd32a','#ff4757'];
+  grid.innerHTML = DB.envelopes.map((env,i) => {
+    const spent = DB.transactions.filter(t =>
+      t.type==='expense' && t.envelopeId===env.id && t.date>=ws && t.date<=we
+    ).reduce((s,t)=>s+t.amount,0);
+    const left = (env.budget||0) - spent;
+    const pct = env.budget ? Math.min(100, (spent/env.budget)*100) : 0;
+    const color = pct >= 100 ? 'var(--danger)' : pct >= 80 ? 'var(--accent2)' : 'var(--accent)';
+    const leftColor = left < 0 ? 'var(--danger)' : left <= (env.budget * 0.2) ? 'var(--accent2)' : 'var(--accent)';
+    return `<div class="envelope" onclick="selectEnvelope('${env.id}')">
+      <div class="env-emoji">${env.emoji||'📦'}</div>
+      <div class="env-name">${env.name}</div>
+      <div class="env-left" style="color:${leftColor}">${left<0?'-':''}${fmtMoney(Math.abs(left))}</div>
+      <div class="env-budget">of ${fmtMoney(env.budget||0)}/wk</div>
+      <div class="env-bar"><div class="env-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+    </div>`;
+  }).join('') + `<div class="env-add-btn" onclick="openEnvModal()">+</div>`;
+}
+
+let selectedEnvelopeId = null;
+function selectEnvelope(id) {
+  selectedEnvelopeId = id;
+  const env = DB.envelopes.find(e=>e.id===id);
+  if(!env) return;
+  document.getElementById('env-quick-log').style.display='block';
+  document.getElementById('env-quick-title').textContent = `Log to ${env.emoji} ${env.name}`;
+  document.getElementById('env-tx-desc').focus();
+  document.querySelectorAll('.envelope').forEach(e=>e.classList.remove('selected'));
+  document.querySelectorAll('.envelope').forEach(e=>{ if(e.onclick.toString().includes(id)) e.classList.add('selected'); });
+}
+function closeEnvQuickLog() {
+  document.getElementById('env-quick-log').style.display='none';
+  selectedEnvelopeId = null;
+  document.querySelectorAll('.envelope').forEach(e=>e.classList.remove('selected'));
+}
+function logEnvelopeExpense() {
+  const desc = document.getElementById('env-tx-desc').value.trim();
+  const amt = parseFloat(document.getElementById('env-tx-amount').value);
+  if(!desc||isNaN(amt)||amt<=0) { toast('Enter description and amount'); return; }
+  const env = DB.envelopes.find(e=>e.id===selectedEnvelopeId);
+  DB.transactions.unshift({
+    id:uid(), desc, amount:amt, type:'expense',
+    cat: env?.name||'Other', envelopeId: selectedEnvelopeId, date:today()
+  });
+  save(); toast(`Logged to ${env?.name} ✓`);
+  document.getElementById('env-tx-desc').value='';
+  document.getElementById('env-tx-amount').value='';
+  closeEnvQuickLog();
+  renderBudget();
+}
+
+function openEnvModal() { document.getElementById('env-modal').classList.add('open'); }
+function closeEnvModal() { document.getElementById('env-modal').classList.remove('open'); }
+function saveEnvelope() {
+  const name = document.getElementById('env-name').value.trim();
+  const budget = parseFloat(document.getElementById('env-budget').value)||0;
+  const emoji = document.getElementById('env-emoji').value.trim()||'📦';
+  if(!name) { toast('Enter category name'); return; }
+  DB.envelopes.push({ id:uid(), name, budget, emoji });
+  save(); closeEnvModal(); toast('Envelope created ✓');
+  document.getElementById('env-name').value='';
+  document.getElementById('env-budget').value='';
+  document.getElementById('env-emoji').value='';
+  renderBudget();
+}
+
+// BILLS
+function billItemHTML(b) {
+  const now = new Date();
+  const daysUntil = b.day - now.getDate();
+  const monthKey = now.getFullYear()+'-'+(now.getMonth()+1);
+  const paid = b.paidMonths?.includes(monthKey);
+  const urgentClass = !paid && daysUntil <= 3 && daysUntil >= 0 ? 'bill-urgent' : (!paid && daysUntil < 0 ? 'bill-overdue' : '');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `<div class="bill-item">
+    <div class="bill-due ${urgentClass}">
+      <div class="bill-due-day">${b.day}</div>
+      <div class="bill-due-mo">${months[now.getMonth()]}</div>
+    </div>
+    <button class="bill-paid-btn ${paid?'paid':''}" onclick="toggleBillPaid('${b.id}')" title="${paid?'Mark unpaid':'Mark paid'}">${paid?'✓':'○'}</button>
+    <div class="li-body">
+      <div class="li-title" style="font-size:13px">${b.name} ${daysUntil===0?'<span class="tag tag-orange">Due Today</span>':daysUntil<0&&!paid?'<span class="tag tag-red">Overdue</span>':daysUntil<=3&&!paid?'<span class="tag tag-orange">Soon</span>':''}</div>
+      <div class="li-meta">${b.cat} · ${paid?'<span style="color:var(--accent)">Paid ✓</span>':'Due on the '+b.day+'th'}</div>
+    </div>
+    <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:${paid?'var(--muted)':'var(--danger)'}">
+      ${fmtMoney(b.amount)}
+    </div>
+    <button class="btn btn-danger btn-sm" onclick="deleteBill('${b.id}')">✕</button>
+  </div>`;
+}
+
+function renderBillsList() {
+  const el = document.getElementById('bills-list');
+  if(!el) return;
+  if(!DB.bills.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No bills added yet</div>'; return; }
+  const sorted = [...DB.bills].sort((a,b)=>a.day-b.day);
+  el.innerHTML = sorted.map(b=>billItemHTML(b)).join('');
+}
+
+function addBill() {
+  const name = document.getElementById('bill-name').value.trim();
+  const amount = parseFloat(document.getElementById('bill-amount').value);
+  const day = parseInt(document.getElementById('bill-day').value);
+  if(!name||isNaN(amount)||!day) { toast('Fill in all bill fields'); return; }
+  DB.bills.push({ id:uid(), name, amount, day, cat:document.getElementById('bill-cat').value, paidMonths:[] });
+  save(); toast('Bill added ✓');
+  ['bill-name','bill-amount','bill-day'].forEach(id=>document.getElementById(id).value='');
+  renderBudget();
+}
+
+function toggleBillPaid(id) {
+  const bill = DB.bills.find(b=>b.id===id);
+  if(!bill) return;
+  const now = new Date();
+  const key = now.getFullYear()+'-'+(now.getMonth()+1);
+  if(!bill.paidMonths) bill.paidMonths=[];
+  if(bill.paidMonths.includes(key)) {
+    bill.paidMonths = bill.paidMonths.filter(m=>m!==key);
+    toast('Marked unpaid');
+  } else {
+    bill.paidMonths.push(key);
+    // Log as a transaction
+    DB.transactions.unshift({ id:uid(), desc:bill.name+' (Bill)', amount:bill.amount, type:'expense', cat:bill.cat, date:today() });
+    toast(bill.name+' marked paid ✓');
+  }
+  save(); renderBudget();
+}
+
+function deleteBill(id) { DB.bills=DB.bills.filter(b=>b.id!==id); save(); renderBudget(); }
+
+// TRANSACTIONS
+function txItemHTML(t) {
+  const catEmoji = {
+    'Groceries':'🛒','Fast Food':'🍟','Restaurants':'🍽️',
+    'Housing / Rent':'🏠','Electric':'⚡','Internet':'📶','Household Supplies':'🧹',
+    'Gas':'⛽','Transportation':'🚗','Car Insurance':'🚘',
+    'Phone':'📱','Renters Insurance':'🏡','Subscriptions':'📺',
+    'Personal Care':'✂️','Clothing':'👕','Medical / Pharmacy':'💊','Health':'🩺',
+    'Gray — Food':'🍔','Gray — Clothing':'👕','Gray — School':'📚','Gray — Activities':'🎮','Gray — Other':'👦',
+    'Entertainment':'🎮','Amazon / Online':'📦','Shopping':'🛍️',
+    'Fees & Interest':'💸','Savings':'🏦','Other':'📦',
+    'Unemployment':'💵','Other Income':'💵'
+  };
+  return `<div class="list-item">
+    <div class="li-icon" style="background:var(--bg3)">${catEmoji[t.cat]||'📦'}</div>
+    <div class="li-body">
+      <div class="li-title">${t.desc}${t.autoLogged?` <span class="tag tag-blue">auto</span>`:''}</div>
+      <div class="li-meta">${t.cat} · ${fmt(t.date)}</div>
+    </div>
+    <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:${t.type==='income'?'var(--accent)':'var(--danger)'}">
+      ${t.type==='income'?'+':'-'}${fmtMoney(t.amount)}
+    </div>
+    <button class="btn btn-danger btn-sm" onclick="deleteTx('${t.id}')">✕</button>
+  </div>`;
+}
+
+function renderTxList() {
+  const range = document.getElementById('budget-filter')?.value||'week';
+  const items = filterItems(DB.transactions, range);
+  const el = document.getElementById('tx-list');
+  if(!el) return;
+  if(!items.length) { el.innerHTML='<div class="empty"><div class="empty-icon">💰</div>No transactions yet.</div>'; return; }
+  el.innerHTML = items.map(t=>txItemHTML(t)).join('');
+}
+
+function renderMerchantChips() {
+  const el = document.getElementById('merchant-chips');
+  if(!el) return;
+  const recent = [...new Set(DB.transactions.filter(t=>t.type==='expense').slice(0,20).map(t=>t.desc))].slice(0,6);
+  if(!recent.length) { el.innerHTML=''; return; }
+  el.innerHTML = recent.map(m=>`<div class="quick-chip" onclick="quickFillMerchant('${m}')">${m}</div>`).join('');
+}
+
+function quickFillMerchant(name) {
+  document.getElementById('tx-desc').value = name;
+  if(DB.merchantMemory[name.toLowerCase()]) {
+    const cat = document.getElementById('tx-cat');
+    if(cat) cat.value = DB.merchantMemory[name.toLowerCase()];
+  }
+  document.getElementById('tx-amount').focus();
+}
+
+function txDescInput(inp) {
+  const val = inp.value.toLowerCase();
+  const match = DB.merchantMemory[val];
+  if(match) { const cat=document.getElementById('tx-cat'); if(cat) cat.value=match; }
+}
+
+function txTypeChange() {
+  const type = document.getElementById('tx-type').value;
+  const cat = document.getElementById('tx-cat');
+  if(type==='income' && cat) cat.value='Unemployment';
+}
+
+function addTransaction() {
+  const desc = document.getElementById('tx-desc').value.trim();
+  const amt = parseFloat(document.getElementById('tx-amount').value);
+  if(!desc||isNaN(amt)||amt<=0) { toast('Enter description and valid amount'); return; }
+  const cat = document.getElementById('tx-cat').value;
+  const type = document.getElementById('tx-type').value;
+  // Remember merchant→category
+  if(type==='expense') DB.merchantMemory[desc.toLowerCase()] = cat;
+  DB.transactions.unshift({
+    id:uid(), desc, amount:amt, type, cat,
+    date: document.getElementById('tx-date').value || today()
+  });
+  save(); toast('Transaction added ✓');
+  document.getElementById('tx-desc').value='';
+  document.getElementById('tx-amount').value='';
+  renderBudget();
+}
+
+function deleteTx(id) { DB.transactions=DB.transactions.filter(t=>t.id!==id); save(); renderBudget(); }
+
+// GOALS
+function renderGoals() {
+  const el = document.getElementById('goals-list');
+  if(!el) return;
+  if(!DB.goals.length) { el.innerHTML='<div class="empty"><div class="empty-icon">🎯</div>No goals yet. Add one above!</div>'; return; }
+  el.innerHTML = DB.goals.map(g => {
+    const pct = Math.min(100, Math.round((g.saved||0)/g.target*100));
+    return `<div class="goal-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div class="goal-name">${g.name}</div>
+        <button class="btn btn-danger btn-sm" onclick="deleteGoal('${g.id}')">✕</button>
+      </div>
+      <div class="goal-amounts"><span>${fmtMoney(g.saved||0)} saved</span><span>${fmtMoney(g.target)} goal</span></div>
+      <div class="goal-bar"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+        <div class="goal-pct">${pct}% · ${fmtMoney(g.target-(g.saved||0))} to go</div>
+        <button class="btn btn-ghost btn-sm" onclick="openContribute('${g.id}')">+ Add</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let contributeGoalId = null;
+function openContribute(id) {
+  contributeGoalId = id;
+  const g = DB.goals.find(g=>g.id===id);
+  document.getElementById('contribute-title').textContent = `Add to: ${g.name}`;
+  document.getElementById('goals-contribute').style.display='block';
+  document.getElementById('contribute-amount').focus();
+}
+function closeContribute() { document.getElementById('goals-contribute').style.display='none'; contributeGoalId=null; }
+function contributeToGoal() {
+  const amt = parseFloat(document.getElementById('contribute-amount').value);
+  if(isNaN(amt)||amt<=0) { toast('Enter valid amount'); return; }
+  const g = DB.goals.find(g=>g.id===contributeGoalId);
+  if(!g) return;
+  g.saved = (g.saved||0)+amt;
+  // Log as expense
+  DB.transactions.unshift({ id:uid(), desc:'Savings: '+g.name, amount:amt, type:'expense', cat:'Other', date:today() });
+  save(); toast(`+${fmtMoney(amt)} added to ${g.name} ✓`);
+  closeContribute();
+  if(g.saved >= g.target) toast('🎉 Goal reached! '+ g.name);
+  renderBudget();
+}
+
+function addGoal() {
+  const name = document.getElementById('goal-name').value.trim();
+  const target = parseFloat(document.getElementById('goal-target').value);
+  if(!name||isNaN(target)||target<=0) { toast('Enter name and target amount'); return; }
+  DB.goals.push({ id:uid(), name, target, saved:0 });
+  save(); toast('Goal added ✓');
+  document.getElementById('goal-name').value='';
+  document.getElementById('goal-target').value='';
+  renderBudget();
+}
+function deleteGoal(id) { DB.goals=DB.goals.filter(g=>g.id!==id); save(); renderBudget(); }
+
+// SETUP
+function renderSetupTab() {
+  const setup = DB.checkSetup;
+  const amtEl = document.getElementById('setup-check-amt');
+  const dayEl = document.getElementById('setup-check-day');
+  if(amtEl && setup.amount) amtEl.value = setup.amount;
+  if(dayEl) dayEl.value = setup.dayOfWeek;
+  const statusEl = document.getElementById('setup-status');
+  if(statusEl) {
+    if(setup.amount) {
+      const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      statusEl.textContent = `✓ Set: ${fmtMoney(setup.amount)} every ${days[setup.dayOfWeek]}`;
+      statusEl.style.color = 'var(--accent)';
+    } else {
+      statusEl.textContent = 'Not configured yet';
+    }
+  }
+}
+function saveCheckSetup() {
+  const amt = parseFloat(document.getElementById('setup-check-amt').value);
+  const day = parseInt(document.getElementById('setup-check-day').value);
+  if(isNaN(amt)||amt<=0) { toast('Enter your check amount'); return; }
+  DB.checkSetup = { amount:amt, dayOfWeek:day };
+  save(); toast('Check setup saved ✓');
+  renderBudget();
+}
+
+// ===== DEBT TRACKER =====
+function initDebtDB() {
+  if(!DB.debts) DB.debts = []; // [{id, type:'advance'|'arrangement'|'bnpl', ...installments:[]}]
+}
+
+// -- UI state --
+let activeDebtType = 'advance';
+function selectDebtType(type, el) {
+  activeDebtType = type;
+  document.querySelectorAll('.debt-type-tab').forEach(t => t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  ['advance','arrangement','bnpl'].forEach(t => {
+    const f = document.getElementById('debt-form-'+t);
+    if(f) f.style.display = t===type ? 'block' : 'none';
+  });
+}
+
+// -- Calc helpers --
+function calcAdvanceRepay() {
+  const amt = parseFloat(document.getElementById('adv-amount')?.value)||0;
+  const fee = parseFloat(document.getElementById('adv-fee')?.value)||0;
+  const el = document.getElementById('adv-repay-total');
+  if(el) el.textContent = fmtMoney(amt+fee);
+}
+function calcArrangement() {
+  const total = parseFloat(document.getElementById('arr-total')?.value)||0;
+  const n = parseInt(document.getElementById('arr-payments')?.value)||2;
+  const el = document.getElementById('arr-each-payment');
+  if(el) el.textContent = fmtMoney(total/n);
+}
+function calcBNPL() {
+  const total = parseFloat(document.getElementById('bnpl-total')?.value)||0;
+  const each = total/4;
+  const elEach = document.getElementById('bnpl-each');
+  if(elEach) elEach.textContent = fmtMoney(each);
+  // Preview schedule
+  const startDate = document.getElementById('bnpl-start-date')?.value || today();
+  const interval = parseInt(document.getElementById('bnpl-interval')?.value)||14;
+  const preview = document.getElementById('bnpl-schedule-preview');
+  if(preview && total > 0) {
+    const dates = buildInstallmentDates(startDate, 4, interval);
+    preview.innerHTML = dates.map((d,i) =>
+      `<span style="color:${i===0?'var(--accent2)':'var(--muted)'}">Payment ${i+1}: ${fmtMoney(each)} — ${fmt(d)}${i===0?' <strong style="color:var(--accent2)">(due now)</strong>':''}</span>`
+    ).join('<br>');
+  }
+}
+
+function buildInstallmentDates(startDate, count, intervalDays) {
+  const dates = [];
+  let d = new Date(startDate+'T00:00:00');
+  for(let i=0;i<count;i++) {
+    dates.push(d.toISOString().slice(0,10));
+    d = new Date(d); d.setDate(d.getDate()+intervalDays);
+  }
+  return dates;
+}
+
+function addAdvance() {
+  const source = document.getElementById('adv-source').value;
+  const amount = parseFloat(document.getElementById('adv-amount').value);
+  const fee = parseFloat(document.getElementById('adv-fee').value)||0;
+  const repayDate = document.getElementById('adv-repay-date').value || today();
+  if(!amount||amount<=0) { toast('Enter borrow amount'); return; }
+  initDebtDB();
+  const debt = {
+    id: uid(), type: 'advance', source,
+    amount, fee, total: amount+fee,
+    borrowDate: today(),
+    installments: [{
+      id: uid(), num: 1, amount: amount+fee,
+      dueDate: repayDate, paid: false, paidDate: null
+    }],
+    settled: false
+  };
+  DB.debts.unshift(debt);
+  // Log borrow as income immediately
+  DB.transactions.unshift({ id:uid(), desc:`Cash Advance — ${source}`, amount, type:'income', cat:'Other Income', date:today() });
+  save(); toast(`${source} advance logged ✓`);
+  document.getElementById('adv-amount').value='';
+  document.getElementById('adv-fee').value='';
+  document.getElementById('adv-repay-total').textContent='$0.00';
+  renderBudget();
+}
+
+function addArrangement() {
+  const company = document.getElementById('arr-company').value.trim();
+  const total = parseFloat(document.getElementById('arr-total').value);
+  const n = parseInt(document.getElementById('arr-payments').value)||2;
+  const firstDate = document.getElementById('arr-first-date').value || today();
+  const interval = parseInt(document.getElementById('arr-interval').value)||14;
+  if(!company||!total||total<=0) { toast('Enter company and bill amount'); return; }
+  initDebtDB();
+  const each = total/n;
+  const dates = buildInstallmentDates(firstDate, n, interval);
+  const debt = {
+    id: uid(), type: 'arrangement', source: company,
+    amount: total, fee: 0, total,
+    startDate: today(),
+    installments: dates.map((d,i) => ({
+      id: uid(), num: i+1, amount: each,
+      dueDate: d, paid: false, paidDate: null
+    })),
+    settled: false
+  };
+  DB.debts.unshift(debt);
+  save(); toast(`${company} arrangement set up ✓`);
+  document.getElementById('arr-company').value='';
+  document.getElementById('arr-total').value='';
+  document.getElementById('arr-each-payment').textContent='$0.00';
+  renderBudget();
+}
+
+function addBNPL() {
+  const source = document.getElementById('bnpl-source').value;
+  const desc = document.getElementById('bnpl-desc').value.trim();
+  const total = parseFloat(document.getElementById('bnpl-total').value);
+  const startDate = document.getElementById('bnpl-start-date').value || today();
+  const interval = parseInt(document.getElementById('bnpl-interval').value)||14;
+  if(!desc||!total||total<=0) { toast('Enter description and purchase amount'); return; }
+  initDebtDB();
+  const each = total/4;
+  const dates = buildInstallmentDates(startDate, 4, interval);
+  const debt = {
+    id: uid(), type: 'bnpl', source,
+    desc, amount: total, fee: 0, total,
+    startDate: today(),
+    installments: dates.map((d,i) => ({
+      id: uid(), num: i+1, amount: each,
+      dueDate: d,
+      paid: i===0, // first payment due now — mark paid by default, log as expense
+      paidDate: i===0 ? today() : null
+    })),
+    settled: false
+  };
+  DB.debts.unshift(debt);
+  // Log first payment immediately as expense
+  DB.transactions.unshift({ id:uid(), desc:`${source} — ${desc} (payment 1/4)`, amount:each, type:'expense', cat:'Shopping', date:today() });
+  save(); toast(`${source} purchase logged · payment 1 of 4 due now ✓`);
+  document.getElementById('bnpl-desc').value='';
+  document.getElementById('bnpl-total').value='';
+  document.getElementById('bnpl-each').textContent='$0.00';
+  document.getElementById('bnpl-schedule-preview').innerHTML='';
+  renderBudget();
+}
+
+function payInstallment(debtId, instId) {
+  initDebtDB();
+  const debt = DB.debts.find(d=>d.id===debtId);
+  if(!debt) return;
+  const inst = debt.installments.find(i=>i.id===instId);
+  if(!inst||inst.paid) return;
+  inst.paid = true;
+  inst.paidDate = today();
+  // Log as expense transaction
+  const label = debt.type==='advance'
+    ? `Repay ${debt.source} advance`
+    : debt.type==='arrangement'
+    ? `${debt.source} arrangement (${inst.num}/${debt.installments.length})`
+    : `${debt.source} — ${debt.desc||''} (${inst.num}/4)`;
+  DB.transactions.unshift({ id:uid(), desc:label, amount:inst.amount, type:'expense',
+    cat: debt.type==='advance'?'Other':debt.type==='arrangement'?'Phone':'Shopping', date:today() });
+  // Auto-settle if all paid
+  if(debt.installments.every(i=>i.paid)) {
+    debt.settled = true;
+    toast('All paid — debt settled! 🎉');
+  } else {
+    toast(`Payment ${inst.num} logged ✓`);
+  }
+  save(); renderBudget();
+}
+
+function deleteDebt(id) {
+  if(!confirm('Remove this debt record?')) return;
+  DB.debts = DB.debts.filter(d=>d.id!==id);
+  save(); renderBudget();
+}
+
+function instBadge(inst) {
+  if(inst.paid) return `<span class="inst-badge inst-paid">✓ Paid</span>`;
+  const daysUntil = Math.ceil((new Date(inst.dueDate+'T00:00:00') - new Date(today()+'T00:00:00')) / 86400000);
+  if(daysUntil < 0) return `<span class="inst-badge inst-overdue">Overdue ${Math.abs(daysUntil)}d</span>`;
+  if(daysUntil === 0) return `<span class="inst-badge inst-due">Due Today</span>`;
+  if(daysUntil <= 7) return `<span class="inst-badge inst-due">Due in ${daysUntil}d</span>`;
+  return `<span class="inst-badge inst-upcoming">Due ${fmt(inst.dueDate)}</span>`;
+}
+
+function renderDebts() {
+  initDebtDB();
+  const showSettled = document.getElementById('show-settled')?.checked;
+  const el = document.getElementById('debts-list');
+  if(!el) return;
+
+  // Summary stats
+  const active = DB.debts.filter(d=>!d.settled);
+  const totalOwed = active.reduce((s,d) => {
+    const unpaid = d.installments.filter(i=>!i.paid).reduce((ss,i)=>ss+i.amount,0);
+    return s+unpaid;
+  }, 0);
+  const dueThisWeek = active.reduce((s,d) => {
+    const due = d.installments.filter(i=>!i.paid && isThisWeek(i.dueDate)).reduce((ss,i)=>ss+i.amount,0);
+    return s+due;
+  }, 0);
+  const feesPaid = DB.debts.filter(d=>d.type==='advance').reduce((s,d)=>s+(d.fee||0),0);
+
+  const setEl = (id,val,color) => { const e=document.getElementById(id); if(e){ e.textContent=val; if(color) e.style.color=color; } };
+  setEl('debt-total-owed', fmtMoney(totalOwed), totalOwed > 0 ? 'var(--danger)' : 'var(--accent)');
+  setEl('debt-due-week', fmtMoney(dueThisWeek), dueThisWeek > 0 ? 'var(--accent2)' : 'var(--accent)');
+  setEl('debt-fees-paid', fmtMoney(feesPaid), feesPaid > 0 ? 'var(--accent2)' : 'var(--muted)');
+
+  const list = showSettled ? DB.debts : DB.debts.filter(d=>!d.settled);
+  if(!list.length) {
+    el.innerHTML='<div class="empty"><div class="empty-icon">✅</div>No debts tracked yet.</div>';
+    return;
+  }
+
+  const typeLabel = {advance:'📲 Cash Advance', arrangement:'📱 Pay Arrangement', bnpl:'🛒 Buy Now Pay Later'};
+  const typeColor = {advance:'var(--accent2)', arrangement:'var(--accent3)', bnpl:'var(--accent4)'};
+
+  el.innerHTML = list.map(debt => {
+    const unpaidAmt = debt.installments.filter(i=>!i.paid).reduce((s,i)=>s+i.amount,0);
+    const paidCount = debt.installments.filter(i=>i.paid).length;
+    const totalCount = debt.installments.length;
+    const pct = Math.round(paidCount/totalCount*100);
+    return `<div class="debt-card ${debt.type} ${debt.settled?'opacity:.5':''}">
+      <div class="debt-header">
+        <div>
+          <div class="debt-title">${debt.desc||debt.source} ${debt.settled?'<span class="tag tag-green">Settled</span>':''}</div>
+          <div class="debt-source">${typeLabel[debt.type]} · ${debt.source}${debt.type==='advance'?' · Borrowed '+fmt(debt.borrowDate):''}</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="deleteDebt('${debt.id}')">✕</button>
+      </div>
+      <div class="debt-amounts">
+        <div class="debt-amt-block"><div class="debt-amt-label">Total</div><div class="debt-amt-val">${fmtMoney(debt.total)}</div></div>
+        ${debt.fee>0?`<div class="debt-amt-block"><div class="debt-amt-label">Fee/Tip</div><div class="debt-amt-val" style="color:var(--accent2)">${fmtMoney(debt.fee)}</div></div>`:''}
+        <div class="debt-amt-block"><div class="debt-amt-label">Still Owe</div><div class="debt-amt-val" style="color:${unpaidAmt>0?'var(--danger)':'var(--accent)'}">${fmtMoney(unpaidAmt)}</div></div>
+      </div>
+      <div style="background:var(--border);border-radius:4px;height:4px;margin-bottom:10px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${typeColor[debt.type]};border-radius:4px;transition:width .4s"></div>
+      </div>
+      <div class="installment-list">
+        ${debt.installments.map(inst=>`
+          <div class="installment">
+            <div class="inst-num">#${inst.num}</div>
+            <div class="inst-body">
+              <div class="inst-amt">${fmtMoney(inst.amount)}</div>
+              <div class="inst-date">${inst.paid?'Paid '+fmt(inst.paidDate):fmt(inst.dueDate)}</div>
+            </div>
+            ${instBadge(inst)}
+            ${!inst.paid?`<button class="inst-pay-btn" onclick="payInstallment('${debt.id}','${inst.id}')">Mark Paid</button>`:`<button class="inst-pay-btn paid" disabled>✓</button>`}
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+
+
+// ===== GRAY =====
+const GRAY_CATS = [
+  { key:'Gray — Food', label:'Food', emoji:'🍔' },
+  { key:'Gray — Clothing', label:'Clothing', emoji:'👕' },
+  { key:'Gray — School', label:'School', emoji:'📚' },
+  { key:'Gray — Activities', label:'Activities', emoji:'🎮' },
+  { key:'Gray — Other', label:'Other', emoji:'📦' },
+];
+
+function addGrayExpense() {
+  const desc = document.getElementById('gray-desc').value.trim();
+  const amt = parseFloat(document.getElementById('gray-amount').value);
+  if(!desc||isNaN(amt)||amt<=0) { toast('Enter description and amount'); return; }
+  DB.transactions.unshift({
+    id:uid(), desc, amount:amt, type:'expense',
+    cat: document.getElementById('gray-cat').value,
+    date: document.getElementById('gray-date').value || today()
+  });
+  save(); toast('Logged for Gray ✓');
+  document.getElementById('gray-desc').value='';
+  document.getElementById('gray-amount').value='';
+  renderGray();
+}
+
+function deleteGrayTx(id) {
+  DB.transactions = DB.transactions.filter(t=>t.id!==id);
+  save(); renderGray();
+}
+
+function renderGray() {
+  // All Gray transactions
+  const allGray = DB.transactions.filter(t => t.cat && t.cat.startsWith('Gray — '));
+  const weekGray = allGray.filter(t=>isThisWeek(t.date));
+  const monthGray = filterItems(allGray,'month');
+
+  const weekTotal = weekGray.reduce((s,t)=>s+t.amount,0);
+  const monthTotal = monthGray.reduce((s,t)=>s+t.amount,0);
+  // Reactive: no hard budget for Gray, but color by week-over-week trend
+  const prevWeekStart = new Date(getWeekStart()+'T00:00:00'); prevWeekStart.setDate(prevWeekStart.getDate()-7);
+  const prevWeekEnd = new Date(getWeekEnd()+'T00:00:00'); prevWeekEnd.setDate(prevWeekEnd.getDate()-7);
+  const prevWeekTotal = allGray.filter(t => t.date >= prevWeekStart.toISOString().slice(0,10) && t.date <= prevWeekEnd.toISOString().slice(0,10)).reduce((s,t)=>s+t.amount,0);
+  const grayHeroColor = weekTotal === 0 ? 'var(--accent4)' : prevWeekTotal > 0 && weekTotal > prevWeekTotal * 1.2 ? 'var(--accent2)' : 'var(--accent4)';
+
+  const el1 = document.getElementById('gray-total-week');
+  if(el1) { el1.textContent = fmtMoney(weekTotal); el1.style.color = grayHeroColor; }
+  const el2 = document.getElementById('gray-total-month-sub');
+  if(el2) el2.textContent = fmtMoney(monthTotal)+' this month total';
+
+  // Category tiles
+  const tilesEl = document.getElementById('gray-cat-tiles');
+  if(tilesEl) {
+    tilesEl.innerHTML = GRAY_CATS.map(c => {
+      const spent = weekGray.filter(t=>t.cat===c.key).reduce((s,t)=>s+t.amount,0);
+      return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="font-size:20px;margin-bottom:6px">${c.emoji}</div>
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px">${c.label}</div>
+        <div style="font-family:var(--mono);font-size:14px;font-weight:800;color:var(--accent4)">${fmtMoney(spent)}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px">this week</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Transaction list
+  const range = document.getElementById('gray-filter')?.value||'week';
+  const filtered = filterItems(allGray, range);
+  const listEl = document.getElementById('gray-tx-list');
+  if(!listEl) return;
+  if(!filtered.length) {
+    listEl.innerHTML='<div class="empty"><div class="empty-icon">👦</div>No expenses logged for Gray yet.</div>';
+    return;
+  }
+  listEl.innerHTML = filtered.map(t=>`
+    <div class="list-item">
+      <div class="li-icon" style="background:var(--bg3)">${GRAY_CATS.find(c=>c.key===t.cat)?.emoji||'👦'}</div>
+      <div class="li-body">
+        <div class="li-title">${t.desc}</div>
+        <div class="li-meta">${t.cat.replace('Gray — ','')} · ${fmt(t.date)}</div>
+      </div>
+      <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--danger)">-${fmtMoney(t.amount)}</div>
+      <button class="btn btn-danger btn-sm" onclick="deleteGrayTx('${t.id}')">✕</button>
+    </div>`).join('');
+}
+
+// Legacy renderTransactions alias so dashboard still works
+function renderTransactions() { renderBudget(); }
+function addMed() {
+  const name = document.getElementById('med-name').value.trim();
+  if(!name) { toast('Enter a medication/supplement name'); return; }
+  DB.meds.push({
+    id: uid(), name,
+    dose: document.getElementById('med-dose').value.trim(),
+    time: document.getElementById('med-time').value,
+    type: document.getElementById('med-type').value,
+    notes: document.getElementById('med-notes').value.trim(),
+    addedDate: today()
+  });
+  save(); toast('Added to tracker ✓');
+  ['med-name','med-dose','med-notes'].forEach(id=>document.getElementById(id).value='');
+  renderMeds();
+}
+
+function toggleMed(medId) {
+  const d = today();
+  if(!DB.medLog[d]) DB.medLog[d] = {};
+  DB.medLog[d][medId] = !DB.medLog[d][medId];
+  save(); renderMeds();
+}
+
+function deleteMed(id) {
+  DB.meds = DB.meds.filter(m=>m.id!==id);
+  save(); renderMeds();
+}
+
+function getMedStreak(medId) {
+  let streak = 0, d = new Date();
+  for(let i=0;i<365;i++) {
+    const key = d.toISOString().slice(0,10);
+    if(DB.medLog[key]?.[medId]) { streak++; d.setDate(d.getDate()-1); }
+    else break;
+  }
+  return streak;
+}
+
+function resetDayMeds() {
+  DB.medLog[today()] = {};
+  save(); renderMeds(); toast('Day reset');
+}
+
+function renderMeds() {
+  document.getElementById('med-today-date').textContent = fmt(today());
+  const d = today();
+  const grid = document.getElementById('med-grid');
+  const allList = document.getElementById('med-all-list');
+  if(!DB.meds.length) {
+    grid.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="empty-icon">💊</div>No meds added yet.</div>';
+    allList.innerHTML='';
+    return;
+  }
+  const typeEmoji = {supplement:'🌿',medication:'💊',vitamin:'🍊',probiotic:'🦠',other:'📋'};
+  const taken = DB.medLog[d]||{};
+  grid.innerHTML = DB.meds.map(m => {
+    const isTaken = !!taken[m.id];
+    const streak = getMedStreak(m.id);
+    return `<div class="med-card ${isTaken?'taken':''}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-size:18px">${typeEmoji[m.type]||'💊'}</span>
+        <div class="med-name">${m.name}</div>
+      </div>
+      <div class="med-dose">${m.dose||'No dose specified'} · ${m.time}</div>
+      ${m.notes?`<div class="med-dose" style="margin-top:3px">${m.notes}</div>`:''}
+      <div class="med-check">
+        <button class="check-btn ${isTaken?'taken':''}" onclick="toggleMed('${m.id}')">${isTaken?'✓ Taken':'Mark Taken'}</button>
+        <span class="streak-badge">${streak>0?'🔥 '+streak+'d':''}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  allList.innerHTML = DB.meds.map(m => `
+    <div class="list-item">
+      <div class="li-icon" style="background:var(--bg3)">${typeEmoji[m.type]||'💊'}</div>
+      <div class="li-body">
+        <div class="li-title">${m.name} <span class="tag tag-purple">${m.type}</span></div>
+        <div class="li-meta">${m.dose||'—'} · ${m.time} · Added ${fmt(m.addedDate)}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteMed('${m.id}')">✕</button>
+    </div>`).join('');
+}
+
+// ===== HEALTH =====
+function selectMood(btn) {
+  document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedMood = btn.dataset.mood;
+}
+
+function buildWaterTracker() {
+  const el = document.getElementById('water-tracker');
+  el.innerHTML = Array.from({length:WATER_GOAL},(_,i)=>`
+    <div class="water-cup ${i<waterGlasses?'filled':''}" onclick="setWater(${i+1})" title="${i+1} glass${i>0?'es':''}">💧</div>`).join('')
+    + `<span style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-left:4px">${waterGlasses}/${WATER_GOAL}</span>`;
+}
+function setWater(n) { waterGlasses = (waterGlasses===n)?n-1:n; buildWaterTracker(); }
+
+function logHealth() {
+  const weight = document.getElementById('h-weight').value;
+  const sleep = document.getElementById('h-sleep').value;
+  const steps = document.getElementById('h-steps').value;
+  const bp = document.getElementById('h-bp').value.trim();
+  const hr = document.getElementById('h-hr').value;
+  const notes = document.getElementById('h-notes').value.trim();
+  if(!weight&&!sleep&&!steps&&!bp&&!hr&&!selectedMood&&!waterGlasses&&!notes) {
+    toast('Enter at least one metric'); return;
+  }
+  // Update or add today's entry
+  const idx = DB.healthLog.findIndex(e=>e.date===today());
+  const entry = { date:today(), weight:weight||'', sleep:sleep||'', steps:steps||'', bp:bp||'', hr:hr||'', mood:selectedMood, water:waterGlasses, notes };
+  if(idx>=0) DB.healthLog[idx]=entry; else DB.healthLog.unshift(entry);
+  save(); toast('Health entry saved ✓');
+  renderHealth();
+}
+
+function deleteHealthEntry(date) {
+  DB.healthLog = DB.healthLog.filter(e=>e.date!==date);
+  save(); renderHealth();
+}
+
+function renderHealth() {
+  buildWaterTracker();
+  const recent = DB.healthLog.slice(0,7);
+  // Stats
+  const weights = DB.healthLog.filter(e=>e.weight).slice(0,7).map(e=>parseFloat(e.weight));
+  const sleeps = DB.healthLog.filter(e=>e.sleep).slice(0,7).map(e=>parseFloat(e.sleep));
+  const steps = DB.healthLog.filter(e=>e.steps).slice(0,7).map(e=>parseInt(e.steps));
+  const avg = arr => arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*10)/10:null;
+  document.getElementById('health-stats').innerHTML = `
+    <div class="metric-tile"><div class="mt-label">Latest Weight</div><div class="mt-val">${weights[0]||'—'}<span class="mt-unit"> lbs</span></div></div>
+    <div class="metric-tile"><div class="mt-label">Avg Sleep (7d)</div><div class="mt-val">${avg(sleeps)||'—'}<span class="mt-unit"> hrs</span></div></div>
+    <div class="metric-tile"><div class="mt-label">Avg Steps (7d)</div><div class="mt-val">${avg(steps)?avg(steps).toLocaleString():'—'}</div></div>
+    <div class="metric-tile"><div class="mt-label">Today's Water</div><div class="mt-val">${waterGlasses}<span class="mt-unit">/${WATER_GOAL} gl</span></div></div>`;
+
+  const el = document.getElementById('health-history');
+  if(!DB.healthLog.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📊</div>No entries yet. Log today above!</div>'; return; }
+  el.innerHTML = DB.healthLog.map(e=>`
+    <div class="list-item">
+      <div class="li-icon" style="background:var(--bg3);font-size:20px">${e.mood||'📋'}</div>
+      <div class="li-body">
+        <div class="li-title">${fmt(e.date)}</div>
+        <div class="li-meta">${[e.weight&&e.weight+'lbs',e.sleep&&e.sleep+'hrs sleep',e.steps&&parseInt(e.steps).toLocaleString()+' steps',e.bp&&'BP '+e.bp,e.hr&&e.hr+'bpm',e.water&&'💧'+e.water].filter(Boolean).join(' · ')}</div>
+        ${e.notes?`<div class="li-meta" style="color:var(--muted)">${e.notes}</div>`:''}
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteHealthEntry('${e.date}')">✕</button>
+    </div>`).join('');
+}
+
+// ===== DASHBOARD =====
+function renderDashboard() {
+  document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const d = today();
+  const taken = DB.medLog[d]||{};
+  const medsTaken = Object.values(taken).filter(Boolean).length;
+  const todayWorkouts = DB.workouts.filter(w=>w.date===d).length;
+  const todayHealth = DB.healthLog.find(e=>e.date===d);
+  const monthTx = filterItems(DB.transactions,'month');
+  const monthIncome = monthTx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const monthExp = monthTx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const weekTx = DB.transactions.filter(t=>t.date>=getWeekStart()&&t.date<=getWeekEnd());
+  const weekSpent = weekTx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const weekIn = weekTx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+
+  document.getElementById('dash-tiles').innerHTML = `
+    <div class="dash-tile">
+      <div class="dt-label">Meds Today</div>
+      <div class="dt-val" style="color:var(--accent)">${medsTaken}<span style="font-size:14px;color:var(--muted)">/${DB.meds.length}</span></div>
+      <div class="dt-sub">${DB.meds.length?Math.round(medsTaken/DB.meds.length*100)+'% complete':'No meds added'}</div>
+      <div class="dt-accent" style="background:var(--accent)"></div>
+    </div>
+    <div class="dash-tile">
+      <div class="dt-label">Workouts Today</div>
+      <div class="dt-val" style="color:var(--accent2)">${todayWorkouts}</div>
+      <div class="dt-sub">${DB.workouts.length} total logged</div>
+      <div class="dt-accent" style="background:var(--accent2)"></div>
+    </div>
+    <div class="dash-tile">
+      <div class="dt-label">Free to Spend</div>
+      <div class="dt-val" style="color:${weekIn-weekSpent>=0?'var(--accent)':'var(--danger)'}">${weekIn-weekSpent>=0?'':'-'}${fmtMoney(Math.abs(weekIn-weekSpent)).replace('$','')}</div>
+      <div class="dt-sub">this week · ${fmtMoney(weekSpent)} spent</div>
+      <div class="dt-accent" style="background:var(--accent3)"></div>
+    </div>
+    <div class="dash-tile">
+      <div class="dt-label">Today's Mood</div>
+      <div class="dt-val">${todayHealth?.mood||'—'}</div>
+      <div class="dt-sub">${todayHealth?[todayHealth.weight&&todayHealth.weight+'lbs',todayHealth.sleep&&todayHealth.sleep+'hrs'].filter(Boolean).join(' · ') || 'Logged':'Not logged yet'}</div>
+      <div class="dt-accent" style="background:var(--accent4)"></div>
+    </div>`;
+
+  // Today's meds
+  const medList = document.getElementById('dash-meds-list');
+  if(!DB.meds.length) { medList.innerHTML='<div class="empty" style="padding:20px 0"><div class="empty-icon" style="font-size:24px">💊</div>No meds added</div>'; }
+  else {
+    medList.innerHTML = DB.meds.slice(0,5).map(m=>`
+      <div class="list-item">
+        <div style="font-size:18px">${taken[m.id]?'✅':'⬜'}</div>
+        <div class="li-body">
+          <div class="li-title" style="font-size:13px">${m.name}</div>
+          <div class="li-meta">${m.dose||'—'} · ${m.time}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  // Recent workouts
+  const wList = document.getElementById('dash-workouts-list');
+  const recent = DB.workouts.slice(0,5);
+  if(!recent.length) { wList.innerHTML='<div class="empty" style="padding:20px 0"><div class="empty-icon" style="font-size:24px">🏋️</div>No workouts logged</div>'; }
+  else {
+    wList.innerHTML = recent.map(w=>`
+      <div class="list-item">
+        <div style="font-size:18px">🏋️</div>
+        <div class="li-body">
+          <div class="li-title" style="font-size:13px">${w.name}</div>
+          <div class="li-meta">${w.cat} · ${fmt(w.date)}</div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+// ===== SETTINGS & API KEY =====
+function getAPIKey() { return localStorage.getItem('healthhub_apikey') || ''; }
+function saveAPIKey() {
+  const k = document.getElementById('api-key-input').value.trim();
+  if(!k) { toast('Paste your API key first'); return; }
+  if(!k.startsWith('sk-ant-')) { setApiStatus('⚠ Key should start with sk-ant-', 'var(--accent2)'); return; }
+  localStorage.setItem('healthhub_apikey', k);
+  setApiStatus('✓ Key saved', 'var(--accent)');
+  toast('API key saved ✓');
+}
+function clearAPIKey() {
+  localStorage.removeItem('healthhub_apikey');
+  document.getElementById('api-key-input').value = '';
+  setApiStatus('Key cleared', 'var(--muted)');
+}
+function setApiStatus(msg, color) {
+  const el = document.getElementById('api-status');
+  if(el) { el.textContent = msg; el.style.color = color; }
+}
+function toggleKeyVisibility() {
+  const inp = document.getElementById('api-key-input');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+async function testAPIKey() {
+  const key = getAPIKey();
+  if(!key) { toast('No API key saved. Go to Settings first.'); return; }
+  setApiStatus('Testing...', 'var(--muted)');
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 10, messages: [{ role: 'user', content: 'hi' }] })
+    });
+    if(r.ok) { setApiStatus('✓ Connection successful!', 'var(--accent)'); toast('API key works ✓'); }
+    else { const e = await r.json(); setApiStatus('✗ ' + (e.error?.message||'Invalid key'), 'var(--danger)'); }
+  } catch(e) { setApiStatus('✗ Network error', 'var(--danger)'); }
+}
+function renderSettings() {
+  const k = getAPIKey();
+  const inp = document.getElementById('api-key-input');
+  if(inp) inp.value = k;
+  if(k) setApiStatus('✓ Key saved — ' + k.slice(0,12) + '...', 'var(--accent)');
+  else setApiStatus('No key saved', 'var(--muted)');
+}
+
+// ===== DATA EXPORT/IMPORT =====
+function exportData() {
+  const blob = new Blob([JSON.stringify(DB, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'healthhub-backup-' + today() + '.json';
+  a.click();
+  toast('Data exported ✓');
+}
+function importData() { document.getElementById('import-file').click(); }
+function handleImport(e) {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if(confirm('This will replace all current data. Continue?')) {
+        Object.assign(DB, data); save(); toast('Data imported ✓'); renderDashboard();
+      }
+    } catch(err) { toast('Invalid JSON file'); }
+  };
+  reader.readAsText(file);
+}
+function nukeData() {
+  if(confirm('Delete ALL data permanently? This cannot be undone.')) {
+    localStorage.removeItem('healthhub_v2');
+    Object.assign(DB, { workouts:[], transactions:[], meds:[], medLog:{}, healthLog:[] });
+    toast('All data cleared'); renderDashboard();
+  }
+}
+
+// ===== AI WORKOUT ASSISTANT =====
+let aiSuggestion = null;
+
+async function askAI(exerciseOverride) {
+  const key = getAPIKey();
+  if(!key) { toast('Add your Anthropic API key in ⚙ Settings first'); return; }
+  const input = exerciseOverride || document.getElementById('ai-exercise-input').value.trim();
+  if(!input) { toast('Type an exercise or machine name first'); return; }
+
+  const loading = document.getElementById('ai-loading');
+  const result = document.getElementById('ai-result');
+  loading.classList.add('show');
+  result.classList.remove('show');
+
+  // Build context from recent workouts
+  const recent = DB.workouts.slice(0, 5).map(w => `${w.name}: ${w.sets||'?'}x${w.reps||'?'} @ ${w.weight||'?'}lbs`).join(', ');
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        messages: [{
+          role: 'user',
+          content: `You are a fitness coach helping log a gym workout. The user is at Planet Fitness or similar gym.
+
+Exercise/machine input: "${input}"
+User's recent workout history: ${recent || 'none yet'}
+
+Respond ONLY with a valid JSON object, no markdown, no explanation:
+{
+  "name": "Clean exercise name",
+  "category": "Strength|Cardio|Flexibility|HIIT|Sports|Other",
+  "sets": number,
+  "reps": number,
+  "weight": number_in_lbs_or_0_for_cardio,
+  "duration": number_in_minutes_or_0,
+  "tip": "One short coaching tip under 100 chars",
+  "description": "One sentence about this exercise and its benefits"
+}`
+        }]
+      })
+    });
+
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '';
+    const clean = text.replace(/```json|```/g, '').trim();
+    aiSuggestion = JSON.parse(clean);
+
+    document.getElementById('ai-ex-name').textContent = aiSuggestion.name;
+    document.getElementById('ai-chips').innerHTML = [
+      aiSuggestion.category && `<span class="ai-chip">📂 ${aiSuggestion.category}</span>`,
+      aiSuggestion.sets && `<span class="ai-chip">🔁 ${aiSuggestion.sets} sets</span>`,
+      aiSuggestion.reps && `<span class="ai-chip">💪 ${aiSuggestion.reps} reps</span>`,
+      aiSuggestion.weight && `<span class="ai-chip">⚖ ${aiSuggestion.weight} lbs</span>`,
+      aiSuggestion.duration && `<span class="ai-chip">⏱ ${aiSuggestion.duration} min</span>`,
+    ].filter(Boolean).join('');
+    document.getElementById('ai-desc').textContent = [aiSuggestion.description, aiSuggestion.tip ? '💡 ' + aiSuggestion.tip : ''].filter(Boolean).join(' — ');
+    result.classList.add('show');
+  } catch(e) {
+    toast('AI error — check your API key in Settings');
+    console.error(e);
+  } finally {
+    loading.classList.remove('show');
+  }
+}
+
+function fillFromAI() {
+  if(!aiSuggestion) return;
+  document.getElementById('ex-name').value = aiSuggestion.name || '';
+  document.getElementById('ex-cat').value = aiSuggestion.category || 'Strength';
+  document.getElementById('ex-sets').value = aiSuggestion.sets || '';
+  document.getElementById('ex-reps').value = aiSuggestion.reps || '';
+  document.getElementById('ex-weight').value = aiSuggestion.weight || '';
+  document.getElementById('ex-dur').value = aiSuggestion.duration || '';
+  document.getElementById('ex-notes').value = aiSuggestion.tip || '';
+  // Scroll down to log form
+  document.getElementById('ex-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  toast('Form filled — review and tap Log ✓');
+}
+
+// ===== QR SCANNER =====
+let qrStream = null;
+let qrInterval = null;
+let lastQRValue = '';
+
+function openQR() {
+  document.getElementById('qr-modal').classList.add('open');
+  lastQRValue = '';
+  document.getElementById('qr-scanned-val').textContent = '';
+  document.getElementById('qr-status').textContent = 'Requesting camera...';
+  startCamera();
+}
+
+function closeQR() {
+  document.getElementById('qr-modal').classList.remove('open');
+  stopCamera();
+}
+
+async function startCamera() {
+  try {
+    qrStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    const video = document.getElementById('qr-video');
+    video.srcObject = qrStream;
+    video.play();
+    document.getElementById('qr-status').textContent = '🔍 Scanning... point at QR code or text';
+    qrInterval = setInterval(scanFrame, 300);
+  } catch(e) {
+    document.getElementById('qr-status').textContent = '⚠ Camera access denied. Type the machine name manually instead.';
+  }
+}
+
+function stopCamera() {
+  if(qrInterval) { clearInterval(qrInterval); qrInterval = null; }
+  if(qrStream) { qrStream.getTracks().forEach(t => t.stop()); qrStream = null; }
+}
+
+function retryQR() { stopCamera(); startCamera(); }
+
+function scanFrame() {
+  const video = document.getElementById('qr-video');
+  const canvas = document.getElementById('qr-canvas');
+  if(!video.videoWidth) return;
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+  if(code && code.data && code.data !== lastQRValue) {
+    lastQRValue = code.data;
+    document.getElementById('qr-status').textContent = '✓ QR detected! Ready to analyze.';
+    document.getElementById('qr-scanned-val').textContent = 'Scanned: ' + code.data.slice(0, 100) + (code.data.length > 100 ? '...' : '');
+    document.getElementById('ai-exercise-input').value = code.data.slice(0, 200);
+    // Flash effect
+    document.getElementById('qr-status').style.color = 'var(--accent)';
+    setTimeout(() => { document.getElementById('qr-status').style.color = ''; }, 1000);
+  }
+}
+
+function analyzeQRWithAI() {
+  const val = lastQRValue || document.getElementById('ai-exercise-input').value.trim();
+  if(!val) { toast('No QR code scanned yet — point camera at a QR code'); return; }
+  closeQR();
+  document.getElementById('ai-exercise-input').value = val;
+  askAI(val);
+}
+
+// ===== INIT =====
+load();
+document.getElementById('tx-date').value = today();
+// Set default dates on debt forms
+['adv-repay-date','arr-first-date','bnpl-start-date','gray-date'].forEach(id => {
+  const el = document.getElementById(id);
+  if(el) el.value = today();
+});
+renderDashboard();
+buildWaterTracker();
+</script>
+<!-- Service Worker Registration -->
+<script>
+if('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.log('SW failed:', err));
+  });
+}
+</script>
+</body>
+</html>
