@@ -1567,7 +1567,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.4.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.4.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -3936,7 +3936,7 @@ async function boxRunVideoSearch(query, pageToken) {
     if(data.error) { box.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--danger);margin-top:8px">YouTube error: ${data.error.message}</p>`; return; }
     if(!data.items || !data.items.length) { box.innerHTML = '<p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px">No videos found.</p>'; return; }
     _boxVidToken = data.nextPageToken || '';
-    const html = '<div class="demo-yt-wrap">' + data.items.map(it => {
+    const html = '<div style="display:flex;justify-content:flex-end;margin:6px 0"><button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'box-drill-videos\').innerHTML=\'\';document.getElementById(\'box-drill-more\').innerHTML=\'\'">✕ Close videos</button></div><div class="demo-yt-wrap">' + data.items.map(it => {
       const vid = it.id.videoId;
       const t = it.snippet.title;
       const thumb = it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url || '';
@@ -4740,6 +4740,9 @@ async function showDemoInline(exName, boxId) {
 
 async function showYtClips(exName, boxId) {
   const box = document.getElementById(boxId || 'yt-clips-box');
+  if(!box) return;
+  // Toggle: if clips already loaded, close them
+  if(box.innerHTML.trim() !== '') { box.innerHTML = ''; return; }
   const key = getYtKey();
   if(!key) { box.innerHTML = '<p style="font-family:var(--mono);font-size:11px;color:var(--accent2);margin-top:8px">Add a YouTube API key in ⚙ Settings to load clips.</p>'; return; }
   box.innerHTML = '<div class="ai-loading show"><div class="ai-spinner"></div>Loading clips...</div>';
@@ -4751,13 +4754,14 @@ async function showYtClips(exName, boxId) {
     if(data.error) { box.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--danger);margin-top:8px">YouTube error: ${data.error.message}</p>`; return; }
     if(!data.items || !data.items.length) { box.innerHTML = '<p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px">No clips found.</p>'; return; }
     const playerId = boxId + '-player';
-    box.innerHTML = '<div class="demo-yt-wrap">' + data.items.map(it => {
+    box.innerHTML = `<div style="display:flex;justify-content:flex-end;margin:6px 0"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('${boxId}').innerHTML=''">✕ Close clips</button></div>`
+      + '<div class="demo-yt-wrap">' + data.items.map(it => {
       const vid = it.id.videoId;
       const t = it.snippet.title;
       const thumb = it.snippet.thumbnails?.default?.url || '';
       return `<div class="demo-yt-thumb" onclick="playYt('${vid}','${playerId}')">
         <img src="${thumb}" alt="">
-        <div class="yt-title">${t}</div>
+        <div class="yt-title">${t.replace(/'/g,"")}</div>
       </div>`;
     }).join('') + `<div id="${playerId}"></div></div>`;
   } catch(e) {
@@ -4768,7 +4772,7 @@ async function showYtClips(exName, boxId) {
 function playYt(vid, boxId) {
   const box = document.getElementById(boxId || 'yt-player-box');
   if(!box) return;
-  box.innerHTML = `<iframe class="demo-yt-frame" src="https://www.youtube.com/embed/${vid}?autoplay=1&playsinline=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+  box.innerHTML = `<div style="display:flex;justify-content:flex-end;margin:6px 0"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('${boxId}').innerHTML=''">✕ Close video</button></div><iframe class="demo-yt-frame" src="https://www.youtube.com/embed/${vid}?autoplay=1&playsinline=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
   box.scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 
