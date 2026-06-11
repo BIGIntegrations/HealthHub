@@ -574,6 +574,24 @@
     <div id="cardio-photo-result"></div>
     </div>
   </div>
+  <!-- PROGRESS CHARTS -->
+  <div class="card collapse-card collapsed" id="cc-progress">
+    <div class="collapse-head" onclick="toggleCollapse('cc-progress'); setTimeout(renderProgressCharts,50)">
+      <h2>📈 Progress</h2>
+      <span class="collapse-chevron">▼</span>
+    </div>
+    <div class="collapse-body">
+      <div id="progress-empty" style="display:none;font-family:var(--mono);font-size:11px;color:var(--muted);padding:8px 0">Log a few workouts across different weeks to see your trends here.</div>
+      <div id="progress-charts">
+        <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Weekly Volume (lbs lifted)</div>
+        <canvas id="vol-canvas" style="width:100%;height:160px;margin-bottom:6px"></canvas>
+        <div id="vol-note" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:18px"></div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Workouts per Week</div>
+        <canvas id="count-canvas" style="width:100%;height:160px"></canvas>
+        <div id="count-note" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
   <div class="card">
     <div class="card-header"><h2 style="margin:0">Workout Log</h2>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1549,7 +1567,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.3.2</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.4.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -3158,6 +3176,87 @@ function renderWeightChart() {
     note.textContent = `${arrow} ${Math.abs(diff).toFixed(1)} lbs ${dir} over this period · now ${last} lbs`;
     note.style.color = 'var(--muted)';
   }
+}
+
+// ===== PROGRESS CHARTS =====
+function weekKey(dateStr) {
+  // ISO-ish: get Monday of that week as YYYY-MM-DD
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = (d.getDay() + 6) % 7; // Mon=0
+  d.setDate(d.getDate() - day);
+  return localDate(d);
+}
+function exVolume(w) {
+  const sets = parseFloat(w.sets)||0, reps = parseFloat(w.reps)||0, wt = parseFloat(w.weight)||0;
+  return sets * reps * wt;
+}
+function drawBarChart(canvasId, labels, values, noteId, unit, color) {
+  const canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 320, cssH = 160;
+  canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,cssW,cssH);
+  const pad = { l: 38, r: 10, t: 10, b: 26 };
+  const w = cssW-pad.l-pad.r, h = cssH-pad.t-pad.b;
+  const max = Math.max(...values, 1);
+  // grid + y labels
+  ctx.strokeStyle = '#242830'; ctx.lineWidth = 1;
+  ctx.fillStyle = '#6b7280'; ctx.font = '9px DM Mono, monospace'; ctx.textAlign='right';
+  for(let i=0;i<=3;i++){
+    const val = max - (i/3)*max;
+    const yy = pad.t + (i/3)*h;
+    ctx.beginPath(); ctx.moveTo(pad.l,yy); ctx.lineTo(cssW-pad.r,yy); ctx.stroke();
+    const lbl = val>=1000 ? (val/1000).toFixed(1)+'k' : Math.round(val);
+    ctx.fillText(lbl, pad.l-5, yy+3);
+  }
+  // bars
+  const n = values.length;
+  const bw = Math.min(38, (w/n)*0.6);
+  const gap = w/n;
+  values.forEach((v,i) => {
+    const bh = max>0 ? (v/max)*h : 0;
+    const bx = pad.l + i*gap + (gap-bw)/2;
+    const by = pad.t + h - bh;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 4); else ctx.rect(bx,by,bw,bh);
+    ctx.fill();
+    // x label
+    ctx.fillStyle = '#6b7280'; ctx.font='9px DM Mono, monospace'; ctx.textAlign='center';
+    ctx.fillText(labels[i], bx+bw/2, cssH-8);
+  });
+}
+function renderProgressCharts() {
+  const empty = document.getElementById('progress-empty');
+  const charts = document.getElementById('progress-charts');
+  if(!charts) return;
+  const strength = DB.workouts.filter(w => w.date);
+  if(strength.length < 1) { empty.style.display='block'; charts.style.display='none'; return; }
+  // bucket by week, last 8 weeks
+  const byWeek = {};
+  strength.forEach(w => {
+    const k = weekKey(w.date);
+    if(!byWeek[k]) byWeek[k] = { vol:0, count:0 };
+    byWeek[k].vol += exVolume(w);
+    byWeek[k].count += 1;
+  });
+  const weeks = Object.keys(byWeek).sort().slice(-8);
+  if(weeks.length < 1) { empty.style.display='block'; charts.style.display='none'; return; }
+  empty.style.display='none'; charts.style.display='block';
+  const labels = weeks.map(k => { const d = new Date(k+'T00:00:00'); return (d.getMonth()+1)+'/'+d.getDate(); });
+  const vols = weeks.map(k => Math.round(byWeek[k].vol));
+  const counts = weeks.map(k => byWeek[k].count);
+  drawBarChart('vol-canvas', labels, vols, null, 'lbs', '#00e5a0');
+  drawBarChart('count-canvas', labels, counts, null, '', '#7c9eff');
+  // notes
+  const volNote = document.getElementById('vol-note');
+  const countNote = document.getElementById('count-note');
+  const totalVol = vols.reduce((a,b)=>a+b,0);
+  if(volNote) volNote.textContent = `${weeks.length} week${weeks.length>1?'s':''} · ${totalVol>=1000?(totalVol/1000).toFixed(1)+'k':totalVol} lbs total`;
+  if(countNote) countNote.textContent = `${counts.reduce((a,b)=>a+b,0)} workouts total · avg ${(counts.reduce((a,b)=>a+b,0)/weeks.length).toFixed(1)}/week`;
 }
 
 // ===== MEAL TRACKER =====
