@@ -522,9 +522,40 @@
     </div>
     <div class="input-row ir-2">
       <div><label>⌚ Calories (from watch)</label><input id="ex-cals" type="number" placeholder="optional — leave blank to estimate" min="0"></div>
-      <div><label>Notes</label><input id="ex-notes" placeholder="Optional notes..."></div>
+      <div><label>Tips (form cues)</label><input id="ex-tips" placeholder="auto-filled by AI"></div>
+    </div>
+    <div class="input-row">
+      <div><label>Notes (your own)</label><input id="ex-notes" placeholder="e.g. grip width, left shoulder tight, go heavier next time"></div>
     </div>
     <button class="btn btn-primary" onclick="addWorkout()">+ Log Exercise</button>
+  </div>
+
+  <!-- Cardio from machine -->
+  <div class="card">
+    <div class="card-header" style="margin-bottom:10px">
+      <h2 style="margin:0">🏃 Log Cardio from Machine</h2>
+      <span class="tag tag-purple">Photo or Manual</span>
+    </div>
+    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px">Finished on a treadmill/stair climber? Snap the summary screen to auto-read it, or just type the numbers. Both log a cardio workout.</p>
+    <button class="btn btn-ghost" onclick="openCardioPhoto()" style="width:100%;margin-bottom:10px">📷 Snap Machine Screen (AI reads it)</button>
+    <input type="file" id="cardio-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleCardioPhoto(event)">
+    <div class="ai-loading" id="cardio-photo-loading"><div class="ai-spinner"></div>Reading the screen...</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 8px">Or enter manually</div>
+    <div class="input-row ir-2">
+      <div><label>Machine</label>
+        <select id="cardio-machine">
+          <option>Treadmill</option><option>Stair Climber</option><option>Bike</option><option>Elliptical</option><option>Rower</option><option>Other Cardio</option>
+        </select>
+      </div>
+      <div><label>Duration (min)</label><input type="number" id="cardio-dur" min="0" placeholder="e.g. 20"></div>
+    </div>
+    <div class="input-row ir-3">
+      <div><label>Distance (mi)</label><input type="number" id="cardio-dist" step="0.01" min="0" placeholder="opt"></div>
+      <div><label>⌚ Calories</label><input type="number" id="cardio-cals" min="0" placeholder="opt"></div>
+      <div><label>Avg HR</label><input type="number" id="cardio-hr" min="0" placeholder="opt"></div>
+    </div>
+    <button class="btn btn-primary" onclick="logCardioManual()" style="width:100%;margin-top:4px">+ Log Cardio</button>
+    <div id="cardio-photo-result"></div>
   </div>
   <div class="card">
     <div class="card-header"><h2 style="margin:0">Workout Log</h2>
@@ -758,6 +789,41 @@
 <div class="modal-overlay" id="routine-detail-modal">
   <div class="modal" style="max-height:88vh;overflow-y:auto">
     <div id="routine-detail-content"></div>
+  </div>
+</div>
+
+<!-- EDIT WORKOUT MODAL -->
+<div class="modal-overlay" id="edit-workout-modal">
+  <div class="modal" style="max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h2 style="margin:0">Edit Workout</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeEditWorkout()">✕</button>
+    </div>
+    <input type="hidden" id="edit-w-id">
+    <div class="input-row"><div><label>Exercise</label><input id="edit-w-name"></div></div>
+    <div class="input-row ir-2">
+      <div><label>Category</label>
+        <select id="edit-w-cat">
+          <option>Strength</option><option>Cardio</option><option>Flexibility</option><option>HIIT</option><option>Sports</option><option>Other</option>
+        </select>
+      </div>
+      <div><label>Date</label><input type="date" id="edit-w-date"></div>
+    </div>
+    <div class="input-row ir-3">
+      <div><label>Sets</label><input type="number" id="edit-w-sets" min="0"></div>
+      <div><label>Reps</label><input type="number" id="edit-w-reps" min="0"></div>
+      <div><label>Weight</label><input type="number" id="edit-w-weight" min="0"></div>
+    </div>
+    <div class="input-row ir-2">
+      <div><label>Duration (min)</label><input type="number" id="edit-w-dur" min="0"></div>
+      <div><label>⌚ Calories</label><input type="number" id="edit-w-cals" min="0"></div>
+    </div>
+    <div class="input-row"><div><label>Tips</label><input id="edit-w-tips"></div></div>
+    <div class="input-row"><div><label>Notes</label><input id="edit-w-notes"></div></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveEditWorkout()">Save Changes</button>
+      <button class="btn btn-ghost" onclick="closeEditWorkout()">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -1429,7 +1495,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v2.9.2</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.0.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1493,17 +1559,17 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  if(typeof event!=='undefined' && event && event.currentTarget) {
-    event.currentTarget.classList.add('active');
-    event.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-  }
+  // Highlight the matching nav button (works whether clicked or called programmatically)
+  const btn = [...document.querySelectorAll('.nav-btn')].find(b => (b.getAttribute('onclick')||'').includes("'"+id+"'"));
+  if(btn) { btn.classList.add('active'); btn.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' }); }
   // Rest-timer button only on Fitness
   const fab = document.getElementById('rest-fab');
   if(fab) fab.style.display = (id==='fitness') ? 'flex' : 'none';
-  // If timer panel is open and leaving fitness, hide it too
   if(id!=='fitness') { const t=document.getElementById('rest-timer'); if(t) t.classList.remove('show'); }
+  window.scrollTo({ top:0, behavior:'smooth' });
   renderPage(id);
 }
+function goPage(id) { showPage(id); }
 function renderPage(id) {
   if(id==='dashboard') renderDashboard();
   if(id==='fitness') { renderWorkouts(); renderEquipment(); initRoutineDB(); if(fitTab==='routines') renderRoutines(); updateAiBadge(); }
@@ -1555,6 +1621,7 @@ function addWorkout() {
     weight: document.getElementById('ex-weight').value || '',
     dur: document.getElementById('ex-dur').value || '',
     cals: document.getElementById('ex-cals').value || '',
+    tips: document.getElementById('ex-tips').value.trim(),
     notes: document.getElementById('ex-notes').value.trim(),
     date: today()
   };
@@ -1563,13 +1630,120 @@ function addWorkout() {
   const realCal = parseInt(w.cals)||0;
   const cals = realCal || estimateCalories(w);
   toast(`Workout logged ✓ ${realCal?'':'~'}${cals} cal`);
-  ['ex-name','ex-sets','ex-reps','ex-weight','ex-dur','ex-cals','ex-notes'].forEach(id => document.getElementById(id).value='');
+  ['ex-name','ex-sets','ex-reps','ex-weight','ex-dur','ex-cals','ex-tips','ex-notes'].forEach(id => document.getElementById(id).value='');
   renderWorkouts();
 }
 
 function deleteWorkout(id) {
   DB.workouts = DB.workouts.filter(w => w.id !== id);
   save(); renderWorkouts();
+}
+
+// ===== CARDIO MACHINE LOGGER =====
+function logCardioManual() {
+  const machine = document.getElementById('cardio-machine').value;
+  const dur = document.getElementById('cardio-dur').value;
+  const dist = document.getElementById('cardio-dist').value;
+  const cals = document.getElementById('cardio-cals').value;
+  const hr = document.getElementById('cardio-hr').value;
+  if(!dur && !dist && !cals) { toast('Enter at least duration, distance, or calories'); return; }
+  const noteParts = [];
+  if(dist) noteParts.push(dist+' mi');
+  if(hr) noteParts.push('avg HR '+hr);
+  DB.workouts.unshift({
+    id: uid(), name: machine, cat: 'Cardio',
+    sets:'', reps:'', weight:'', dur: dur||'', cals: cals||'',
+    tips:'', notes: noteParts.join(' · '), date: today()
+  });
+  save();
+  const realCal = parseInt(cals)||0;
+  toast(`${machine} logged ✓ ${realCal?'⌚'+realCal:'~'+estimateCalories({cat:'Cardio',dur})} cal`);
+  ['cardio-dur','cardio-dist','cardio-cals','cardio-hr'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cardio-photo-result').innerHTML='';
+  renderWorkouts();
+}
+function openCardioPhoto() { document.getElementById('cardio-photo-input').click(); }
+function handleCardioPhoto(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const loading = document.getElementById('cardio-photo-loading');
+  const result = document.getElementById('cardio-photo-result');
+  result.innerHTML=''; loading.classList.add('show');
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = async () => {
+      const maxDim = 1024;
+      let w = img.width, h = img.height;
+      if(w > h && w > maxDim) { h = h*maxDim/w; w = maxDim; }
+      else if(h > maxDim) { w = w*maxDim/h; h = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+      try {
+        const prompt = `This is a photo of a cardio machine's summary/workout screen (treadmill, stair climber, bike, etc.). Read the numbers and respond ONLY with valid JSON, no markdown:
+{ "machine": "Treadmill|Stair Climber|Bike|Elliptical|Rower|Other Cardio", "duration_min": number_or_null, "distance_mi": number_or_null, "calories": number_or_null, "avg_hr": number_or_null }
+If a value isn't visible use null. Convert any MM:SS time to total minutes (rounded).`;
+        const text = await callAIWithImage(prompt, base64, 400);
+        const clean = text.replace(/```json|```/g,'').trim();
+        const m = clean.match(/\{[\s\S]*\}/);
+        const data = JSON.parse(m ? m[0] : clean);
+        if(data.machine) document.getElementById('cardio-machine').value = data.machine;
+        if(data.duration_min!=null) document.getElementById('cardio-dur').value = data.duration_min;
+        if(data.distance_mi!=null) document.getElementById('cardio-dist').value = data.distance_mi;
+        if(data.calories!=null) document.getElementById('cardio-cals').value = data.calories;
+        if(data.avg_hr!=null) document.getElementById('cardio-hr').value = data.avg_hr;
+        result.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:10px">✓ Read the screen — check the values below, fix anything off, then tap "Log Cardio"</p>`;
+      } catch(err) {
+        result.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--accent2);margin-top:10px">Couldn't read it (${err.message}). Just type the numbers below instead.</p>`;
+      } finally {
+        loading.classList.remove('show');
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
+}
+
+function openEditWorkout(id) {
+  const w = DB.workouts.find(x => x.id === id);
+  if(!w) return;
+  document.getElementById('edit-w-id').value = w.id;
+  document.getElementById('edit-w-name').value = w.name || '';
+  document.getElementById('edit-w-cat').value = w.cat || 'Strength';
+  document.getElementById('edit-w-date').value = w.date || today();
+  document.getElementById('edit-w-sets').value = w.sets || '';
+  document.getElementById('edit-w-reps').value = w.reps || '';
+  document.getElementById('edit-w-weight').value = w.weight || '';
+  document.getElementById('edit-w-dur').value = w.dur || '';
+  document.getElementById('edit-w-cals').value = w.cals || '';
+  document.getElementById('edit-w-tips').value = w.tips || '';
+  document.getElementById('edit-w-notes').value = w.notes || '';
+  document.getElementById('edit-workout-modal').classList.add('show');
+}
+function closeEditWorkout() {
+  document.getElementById('edit-workout-modal').classList.remove('show');
+}
+function saveEditWorkout() {
+  const id = document.getElementById('edit-w-id').value;
+  const w = DB.workouts.find(x => x.id === id);
+  if(!w) return;
+  w.name = document.getElementById('edit-w-name').value.trim() || w.name;
+  w.cat = document.getElementById('edit-w-cat').value;
+  w.date = document.getElementById('edit-w-date').value || w.date;
+  w.sets = document.getElementById('edit-w-sets').value || '';
+  w.reps = document.getElementById('edit-w-reps').value || '';
+  w.weight = document.getElementById('edit-w-weight').value || '';
+  w.dur = document.getElementById('edit-w-dur').value || '';
+  w.cals = document.getElementById('edit-w-cals').value || '';
+  w.tips = document.getElementById('edit-w-tips').value.trim();
+  w.notes = document.getElementById('edit-w-notes').value.trim();
+  save();
+  closeEditWorkout();
+  renderWorkouts();
+  toast('Workout updated ✓');
 }
 
 function filterItems(items, range, dateKey='date') {
@@ -1614,9 +1788,10 @@ function renderWorkouts() {
         <div class="li-title">${w.name} <span class="tag tag-${catColors[w.cat]||'blue'}">${w.cat}</span></div>
         <div class="li-meta">${[w.sets&&w.sets+'sets', w.reps&&w.reps+'reps', w.weight&&w.weight+'lbs', w.dur&&w.dur+'min'].filter(Boolean).join(' · ')} · ${fmt(w.date)}</div>
         <div class="li-meta" style="margin-top:2px;color:var(--accent3)">${c.real?'⌚ ':'~'}${c.cal} cal${vol?' · '+vol.toLocaleString()+' lbs volume':''}</div>
-        ${w.notes?`<div class="li-meta" style="margin-top:2px;color:var(--muted)">${w.notes}</div>`:''}
+        ${w.tips?`<div class="li-meta" style="margin-top:2px;color:var(--muted)">💡 ${w.tips}</div>`:''}
+        ${w.notes?`<div class="li-meta" style="margin-top:2px;color:var(--text)">📝 ${w.notes}</div>`:''}
       </div>
-      <div class="li-actions"><button class="btn btn-danger btn-sm" onclick="deleteWorkout('${w.id}')">✕</button></div>
+      <div class="li-actions" style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditWorkout('${w.id}')">✎</button><button class="btn btn-danger btn-sm" onclick="deleteWorkout('${w.id}')">✕</button></div>
     </div>`;
   }).join('');
 }
@@ -3060,25 +3235,25 @@ function renderDashboard() {
   const weekIn = weekTx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
 
   document.getElementById('dash-tiles').innerHTML = `
-    <div class="dash-tile">
+    <div class="dash-tile" style="cursor:pointer" onclick="goPage('meds')">
       <div class="dt-label">Meds Today</div>
       <div class="dt-val" style="color:var(--accent)">${medsTaken}<span style="font-size:14px;color:var(--muted)">/${DB.meds.length}</span></div>
       <div class="dt-sub">${DB.meds.length?Math.round(medsTaken/DB.meds.length*100)+'% complete':'No meds added'}</div>
       <div class="dt-accent" style="background:var(--accent)"></div>
     </div>
-    <div class="dash-tile">
+    <div class="dash-tile" style="cursor:pointer" onclick="goPage('fitness')">
       <div class="dt-label">Workouts Today</div>
       <div class="dt-val" style="color:var(--accent2)">${todayWorkouts}</div>
       <div class="dt-sub">${DB.workouts.length} total logged</div>
       <div class="dt-accent" style="background:var(--accent2)"></div>
     </div>
-    <div class="dash-tile">
+    <div class="dash-tile" style="cursor:pointer" onclick="goPage('budget')">
       <div class="dt-label">Free to Spend</div>
       <div class="dt-val" style="color:${weekIn-weekSpent>=0?'var(--accent)':'var(--danger)'}">${weekIn-weekSpent>=0?'':'-'}${fmtMoney(Math.abs(weekIn-weekSpent)).replace('$','')}</div>
       <div class="dt-sub">this week · ${fmtMoney(weekSpent)} spent</div>
       <div class="dt-accent" style="background:var(--accent3)"></div>
     </div>
-    <div class="dash-tile">
+    <div class="dash-tile" style="cursor:pointer" onclick="goPage('health')">
       <div class="dt-label">Today's Mood</div>
       <div class="dt-val">${todayHealth?.mood||'—'}</div>
       <div class="dt-sub">${todayHealth?[todayHealth.weight&&todayHealth.weight+'lbs',todayHealth.sleep&&todayHealth.sleep+'hrs'].filter(Boolean).join(' · ') || 'Logged':'Not logged yet'}</div>
@@ -3105,10 +3280,10 @@ function renderDashboard() {
   if(!recent.length) { wList.innerHTML='<div class="empty" style="padding:20px 0"><div class="empty-icon" style="font-size:24px">🏋️</div>No workouts logged</div>'; }
   else {
     wList.innerHTML = recent.map(w=>`
-      <div class="list-item">
-        <div style="font-size:18px">🏋️</div>
-        <div class="li-body">
-          <div class="li-title" style="font-size:13px">${w.name}</div>
+      <div class="list-item" style="cursor:pointer" onclick="goPage('fitness')">
+        <div style="font-size:18px;width:28px;flex-shrink:0;text-align:center">🏋️</div>
+        <div class="li-body" style="min-width:0">
+          <div class="li-title" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
           <div class="li-meta">${w.cat} · ${fmt(w.date)}</div>
         </div>
       </div>`).join('');
@@ -4040,7 +4215,8 @@ function logIdentifiedMachine() {
   document.getElementById('ex-sets').value = m.sets || '';
   document.getElementById('ex-reps').value = m.reps || '';
   document.getElementById('ex-weight').value = m.weight || '';
-  document.getElementById('ex-notes').value = m.tip || '';
+  document.getElementById('ex-tips').value = m.tip || '';
+  document.getElementById('ex-notes').value = '';
   setTimeout(()=>document.getElementById('ex-name').scrollIntoView({behavior:'smooth',block:'center'}),100);
   toast('Jumped to Log — review and tap Log ✓');
 }
@@ -4212,23 +4388,23 @@ function startRestTimer() {
   }, 1000);
 }
 function restBeep() {
-  playTone(660, 0.3, 0.3);
-  if(navigator.vibrate) navigator.vibrate(100);
+  // 10-second warning: one clear beep
+  playTone(700, 0.35, 0.6);
+  if(navigator.vibrate) navigator.vibrate(150);
+}
+function restDone() {
+  updateRestDisplay();
+  toast('⏱ Rest over — next set!');
+  // distinct double beep at end, louder + higher
+  playTone(950, 0.22, 0.7);
+  setTimeout(()=>playTone(950, 0.30, 0.7), 260);
+  if(navigator.vibrate) navigator.vibrate([200,120,250]);
 }
 function stopRestTimer() {
   clearInterval(restInterval); restInterval = null; restRunning = false;
   const btn = document.getElementById('rest-start-btn');
   if(btn) btn.textContent = 'Start';
 }
-function restDone() {
-  updateRestDisplay();
-  toast('⏱ Rest over — next set!');
-  playTone(880, 0.18, 0.4);
-  setTimeout(()=>playTone(880,0.18,0.4), 200);
-  setTimeout(()=>playTone(1100,0.25,0.4), 400);
-  if(navigator.vibrate) navigator.vibrate([200,100,200]);
-}
-
 async function showDemoInline(exName, boxId) {
   const box = document.getElementById(boxId);
   if(!box) return;
@@ -4307,7 +4483,8 @@ function logEquip(idx) {
   document.getElementById('ex-reps').value = e.reps || '';
   document.getElementById('ex-weight').value = e.weight || '';
   document.getElementById('ex-dur').value = e.dur || '';
-  document.getElementById('ex-notes').value = e.tips || '';
+  document.getElementById('ex-tips').value = e.tips || '';
+  document.getElementById('ex-notes').value = '';
   setTimeout(() => document.getElementById('ex-name').scrollIntoView({ behavior:'smooth', block:'center' }), 100);
   toast('Jumped to Log — review and tap Log ✓');
 }
@@ -5065,7 +5242,8 @@ function fillFromAI() {
   document.getElementById('ex-reps').value = aiSuggestion.reps || '';
   document.getElementById('ex-weight').value = aiSuggestion.weight || '';
   document.getElementById('ex-dur').value = aiSuggestion.duration || '';
-  document.getElementById('ex-notes').value = aiSuggestion.tip || '';
+  document.getElementById('ex-tips').value = aiSuggestion.tip || '';
+  document.getElementById('ex-notes').value = '';
   document.getElementById('ex-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
   toast('Form filled — review and tap Log ✓');
 }
