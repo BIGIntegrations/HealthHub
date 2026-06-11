@@ -1429,7 +1429,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v2.8.3</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v2.9.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -3197,15 +3197,27 @@ function pickBoxVoice() {
   for(const test of prefs) { const f = voices.find(test); if(f) return f; }
   return voices[0];
 }
-function populateVoiceDropdown() {
+function populateVoiceDropdown(attempt) {
   const sel = document.getElementById('box-voice-select');
   if(!sel) return;
   const voices = allEnglishVoices();
-  if(!voices.length) { sel.innerHTML = '<option>Loading voices...</option>'; return; }
+  if(!voices.length) {
+    // iOS often returns empty initially — retry a few times
+    attempt = attempt || 0;
+    if(attempt < 10) {
+      sel.innerHTML = '<option>Loading voices...</option>';
+      // nudge the engine
+      try { speechSynthesis.getVoices(); } catch(e){}
+      setTimeout(()=>populateVoiceDropdown(attempt+1), 300);
+    } else {
+      sel.innerHTML = '<option value="">Default voice</option>';
+    }
+    return;
+  }
   const current = _boxVoice?.name || localStorage.getItem('healthhub_box_voice') || '';
   sel.innerHTML = voices.map(v => {
     const nice = v.name.replace(/\(.*?\)/g,'').trim();
-    const region = /en-GB/i.test(v.lang)?'🇬🇧':/en-US/i.test(v.lang)?'🇺🇸':/en-AU/i.test(v.lang)?'🇦🇺':'';
+    const region = /en-GB/i.test(v.lang)?'🇬🇧':/en-US/i.test(v.lang)?'🇺🇸':/en-AU/i.test(v.lang)?'🇦🇺':/en-IE/i.test(v.lang)?'🇮🇪':/en-ZA/i.test(v.lang)?'🇿🇦':'';
     return `<option value="${v.name}" ${v.name===current?'selected':''}>${region} ${nice}</option>`;
   }).join('');
 }
@@ -3538,14 +3550,38 @@ async function callAI(prompt, maxTokens) {
   return callAIWithImage(prompt, null, maxTokens);
 }
 
-// AI call that optionally includes a base64 image (vision). Only Gemini & Claude support images here.
+// Try the active provider; if it fails (quota, key, error) fall back to any other provider that has a key.
 async function callAIWithImage(prompt, imageBase64, maxTokens) {
-  const prov = getProvider();
-  const key = getAPIKey();
-  const cfg = AI_PROVIDERS[prov];
-  if(!key) throw new Error('No API key');
-  maxTokens = maxTokens || 500;
+  const active = getProvider();
+  // Build provider try-order: active first, then others that have a key saved
+  let order = [active];
+  ['groq','gemini','openrouter','claude'].forEach(p => { if(p!==active) order.push(p); });
+  // For image requests, only gemini/claude can serve — filter
+  if(imageBase64) order = order.filter(p => p==='gemini' || p==='claude');
+  let lastErr = null;
+  let triedAny = false;
+  for(const prov of order) {
+    const key = localStorage.getItem('healthhub_apikey_'+prov);
+    if(!key) continue; // no key for this provider, skip
+    triedAny = true;
+    try {
+      const txt = await callOneProvider(prov, key, prompt, imageBase64, maxTokens);
+      if(txt) {
+        if(prov !== active) toast('Used '+(AI_PROVIDERS[prov]?.label||prov)+' (fallback)');
+        return txt;
+      }
+    } catch(e) {
+      lastErr = e;
+      // continue to next provider on quota/rate/key errors
+    }
+  }
+  if(!triedAny) throw new Error(imageBase64 ? 'Add a Gemini key in Settings for photos' : 'No API key — add one in Settings');
+  throw lastErr || new Error('All providers failed');
+}
 
+async function callOneProvider(prov, key, prompt, imageBase64, maxTokens) {
+  const cfg = AI_PROVIDERS[prov];
+  maxTokens = maxTokens || 500;
   if(prov === 'claude') {
     const content = imageBase64
       ? [{type:'image',source:{type:'base64',media_type:'image/jpeg',data:imageBase64}},{type:'text',text:prompt}]
@@ -3559,29 +3595,23 @@ async function callAIWithImage(prompt, imageBase64, maxTokens) {
     if(!res.ok) throw new Error(data.error?.message || 'API error');
     return data.content?.[0]?.text || '';
   }
-
   if(prov === 'gemini') {
     const parts = [{text:prompt}];
     if(imageBase64) parts.push({inline_data:{mime_type:'image/jpeg',data:imageBase64}});
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${key}`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ contents:[{parts}], generationConfig:{maxOutputTokens:maxTokens} })
     });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error?.message || 'API error');
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
-
-  if(imageBase64) throw new Error('Switch to Gemini in Settings for photo identification');
-
-  // groq + openrouter — text only, OpenAI-compatible
+  if(imageBase64) throw new Error('no vision');
   const url = prov === 'groq'
     ? 'https://api.groq.com/openai/v1/chat/completions'
     : 'https://openrouter.ai/api/v1/chat/completions';
   const res = await fetch(url, {
-    method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
     body: JSON.stringify({ model:cfg.model, max_tokens:maxTokens, messages:[{role:'user',content:prompt}] })
   });
   const data = await res.json();
@@ -4132,12 +4162,25 @@ function startRestTimer() {
   restInterval = setInterval(() => {
     restRemaining--;
     updateRestDisplay();
+    if(restRemaining === 10) restBeep();
     if(restRemaining <= 0) {
       stopRestTimer();
       restRemaining = restSeconds;
       restDone();
     }
   }, 1000);
+}
+function restBeep() {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value=660; o.type='sine';
+    g.gain.setValueAtTime(0.25,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);
+    o.start(); o.stop(ctx.currentTime+0.3);
+  } catch(e){}
+  if(navigator.vibrate) navigator.vibrate(100);
 }
 function stopRestTimer() {
   clearInterval(restInterval); restInterval = null; restRunning = false;
@@ -4147,18 +4190,20 @@ function stopRestTimer() {
 function restDone() {
   updateRestDisplay();
   toast('⏱ Rest over — next set!');
-  // beep via WebAudio
   try {
     const ctx = new (window.AudioContext||window.webkitAudioContext)();
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.value = 880; o.type = 'sine';
-    g.gain.setValueAtTime(0.3, ctx.currentTime);
-    o.start();
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-    o.stop(ctx.currentTime + 0.5);
+    if(ctx.state === 'suspended') ctx.resume();
+    for(let i=0;i<3;i++){
+      const t = ctx.currentTime + i*0.2;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880; o.type = 'sine';
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.4,t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
+      o.start(t); o.stop(t+0.2);
+    }
   } catch(e) {}
-  // vibrate if supported
   if(navigator.vibrate) navigator.vibrate([200,100,200]);
 }
 
