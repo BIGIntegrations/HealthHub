@@ -80,7 +80,7 @@
   .ir-3 { grid-template-columns: 1fr 1fr 1fr; }
   .ir-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
   label { font-size: 11px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 5px; }
-  input, select, textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: 13px; outline: none; transition: border .2s; }
+  input, select, textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 16px; outline: none; transition: border .2s; }
   input:focus, select:focus, textarea:focus { border-color: var(--accent); }
   select option { background: var(--bg3); }
   textarea { resize: vertical; min-height: 70px; }
@@ -95,7 +95,15 @@
   .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 
   /* DASHBOARD */
-  .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  .dash-bottom { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  @media(min-width: 720px) { .dash-bottom { grid-template-columns: 1fr 1fr; } }
+  .collapse-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .collapse-head h2 { margin: 0; }
+  .collapse-chevron { font-family: var(--mono); font-size: 13px; color: var(--muted); transition: transform .2s; flex-shrink: 0; }
+  .collapse-card.collapsed .collapse-body { display: none; }
+  .collapse-card.collapsed .collapse-chevron { transform: rotate(-90deg); }
+  .collapse-card .collapse-body { margin-top: 12px; }
   .dash-tile { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--card-r); padding: 18px; position: relative; overflow: hidden; transition: border-color .2s; }
   .dash-tile:hover { border-color: var(--accent); }
   .dash-tile .dt-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
@@ -445,7 +453,7 @@
   <h1>Dashboard</h1>
   <p class="sub">Your daily overview — <span id="dash-date"></span></p>
   <div class="dash-grid" id="dash-tiles"></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <div class="dash-bottom">
     <div class="card">
       <h2>Today's Meds</h2>
       <div id="dash-meds-list"></div>
@@ -476,11 +484,15 @@
   <!-- LOG TAB -->
   <div id="fittab-log" class="fittab">
   <!-- AI WORKOUT ASSISTANT -->
-  <div class="card">
-    <div class="card-header" style="margin-bottom:10px">
-      <h2 style="margin:0">🤖 AI Workout Assistant</h2>
-      <span class="tag tag-purple" id="ai-provider-badge">AI</span>
+  <div class="card collapse-card" id="cc-ai">
+    <div class="collapse-head" onclick="toggleCollapse('cc-ai')">
+      <h2>🤖 AI Workout Assistant</h2>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="tag tag-purple" id="ai-provider-badge">AI</span>
+        <span class="collapse-chevron">▼</span>
+      </div>
     </div>
+    <div class="collapse-body">
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px">Type any exercise or machine name — AI auto-fills sets, reps, weight & tips. Or scan a QR code from a machine.</p>
     <div class="ai-panel">
       <div style="display:flex;gap:8px">
@@ -501,11 +513,16 @@
         <div id="ai-alternatives"></div>
       </div>
     </div>
+    </div>
   </div>
 
   <!-- MANUAL LOG -->
-  <div class="card">
-    <h2>Log Workout</h2>
+  <div class="card collapse-card collapsed" id="cc-manual">
+    <div class="collapse-head" onclick="toggleCollapse('cc-manual')">
+      <h2>✍️ Log Workout</h2>
+      <span class="collapse-chevron">▼</span>
+    </div>
+    <div class="collapse-body">
     <div class="input-row ir-2">
       <div><label>Exercise Name</label><input id="ex-name" placeholder="e.g. Bench Press"></div>
       <div><label>Category</label>
@@ -528,39 +545,38 @@
       <div><label>Notes (your own)</label><input id="ex-notes" placeholder="e.g. grip width, left shoulder tight, go heavier next time"></div>
     </div>
     <button class="btn btn-primary" onclick="addWorkout()">+ Log Exercise</button>
+    </div>
   </div>
 
   <!-- Cardio from machine -->
-  <div class="card">
-    <div class="card-header" style="margin-bottom:10px">
-      <h2 style="margin:0">🏃 Log Cardio from Machine</h2>
-      <span class="tag tag-purple">Photo or Manual</span>
+  <div class="card collapse-card collapsed" id="cc-cardio">
+    <div class="collapse-head" onclick="toggleCollapse('cc-cardio')">
+      <h2>🏃 Log Cardio from Machine</h2>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="tag tag-purple" style="flex-shrink:0;white-space:nowrap">Photo / Manual</span>
+        <span class="collapse-chevron">▼</span>
+      </div>
     </div>
+    <div class="collapse-body">
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px">Finished on a treadmill/stair climber? Snap the summary screen to auto-read it, or just type the numbers. Both log a cardio workout.</p>
     <button class="btn btn-ghost" onclick="openCardioPhoto()" style="width:100%;margin-bottom:10px">📷 Snap Machine Screen (AI reads it)</button>
     <input type="file" id="cardio-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleCardioPhoto(event)">
     <div class="ai-loading" id="cardio-photo-loading"><div class="ai-spinner"></div>Reading the screen...</div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 8px">Or enter manually</div>
-    <div class="input-row ir-2">
-      <div><label>Machine</label>
-        <select id="cardio-machine">
-          <option>Treadmill</option><option>Stair Climber</option><option>Bike</option><option>Elliptical</option><option>Rower</option><option>Other Cardio</option>
-        </select>
-      </div>
-      <div><label>Duration (min)</label><input type="number" id="cardio-dur" min="0" placeholder="e.g. 20"></div>
-    </div>
-    <div class="input-row ir-3">
-      <div><label>Distance (mi)</label><input type="number" id="cardio-dist" step="0.01" min="0" placeholder="opt"></div>
-      <div><label>⌚ Calories</label><input type="number" id="cardio-cals" min="0" placeholder="opt"></div>
-      <div><label>Avg HR</label><input type="number" id="cardio-hr" min="0" placeholder="opt"></div>
-    </div>
+    <div class="input-row"><div><label>Machine</label>
+      <select id="cardio-machine" onchange="renderCardioFields()">
+        <option>Treadmill</option><option>Stair Climber</option><option>Bike</option><option>Elliptical</option><option>Rower</option><option>Other Cardio</option>
+      </select>
+    </div></div>
+    <div id="cardio-fields"></div>
     <button class="btn btn-primary" onclick="logCardioManual()" style="width:100%;margin-top:4px">+ Log Cardio</button>
     <div id="cardio-photo-result"></div>
+    </div>
   </div>
   <div class="card">
     <div class="card-header"><h2 style="margin:0">Workout Log</h2>
       <div style="display:flex;gap:8px;align-items:center">
-        <select id="fit-filter" onchange="renderWorkouts()" style="width:auto;padding:5px 10px;font-size:12px">
+        <select id="fit-filter" onchange="renderWorkouts()" style="width:auto;padding:6px 10px;font-size:16px">
           <option value="all">All Time</option>
           <option value="week">This Week</option>
           <option value="month">This Month</option>
@@ -705,7 +721,7 @@
         </label>
         <div id="box-voice-pick" style="margin:0 0 10px 24px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">Voice:</span>
-          <select id="box-voice-select" onchange="boxPickVoice()" style="width:auto;max-width:200px;padding:4px 8px;font-size:11px"></select>
+          <select id="box-voice-select" onchange="boxPickVoice()" style="width:auto;max-width:200px;padding:6px 10px;font-size:16px"></select>
           <button class="btn btn-ghost btn-sm" onclick="boxTestVoice()">▶ Test</button>
         </div>
         <label style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--text);cursor:pointer">
@@ -714,12 +730,12 @@
         <div id="box-combo-opts" style="display:none;margin-top:8px;padding-left:24px">
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">Style:</span>
-            <select id="box-combo-style" onchange="boxSaveOpts()" style="width:auto;padding:4px 8px;font-size:11px">
+            <select id="box-combo-style" onchange="boxSaveOpts()" style="width:auto;padding:6px 10px;font-size:16px">
               <option value="random">Random combos</option>
               <option value="basic">Basic (1-2, 1-2-3)</option>
               <option value="set">My set combo</option>
             </select>
-            <input id="box-combo-set" placeholder="e.g. 1-2-3-2" style="width:110px;padding:4px 8px;font-size:11px;display:none" onchange="boxSaveOpts()">
+            <input id="box-combo-set" placeholder="e.g. 1-2-3-2" style="width:110px;padding:6px 10px;font-size:16px;display:none" onchange="boxSaveOpts()">
           </div>
           <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:6px">1=jab 2=cross 3=lead hook 4=rear hook 5=lead uppercut 6=rear uppercut</div>
         </div>
@@ -732,6 +748,26 @@
       <h2>Log This Session</h2>
       <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:10px">Done training? Log it as a workout — counts toward your weekly stats.</p>
       <button class="btn btn-primary" style="width:100%" onclick="boxLogSession()">🥊 Log Boxing Session</button>
+    </div>
+
+    <!-- Drills & example routines -->
+    <div class="card collapse-card collapsed" id="cc-box-drills">
+      <div class="collapse-head" onclick="toggleCollapse('cc-box-drills')">
+        <h2>📋 Combos & Drills</h2>
+        <span class="collapse-chevron">▼</span>
+      </div>
+      <div class="collapse-body">
+        <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:12px">Beginner combos to drill. Numbers = punches (1=jab, 2=cross, 3=lead hook, 4=rear hook, 5=lead uppercut, 6=rear uppercut).</p>
+        <div id="box-drills-list"></div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Watch technique</div>
+        <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:10px">Pull boxing drill videos from YouTube (needs YouTube key in Settings).</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('beginner boxing combinations')">🎥 Beginner Combos</button>
+          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('boxing footwork drills')">🎥 Footwork</button>
+          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('heavy bag workout routine')">🎥 Bag Work</button>
+        </div>
+        <div id="box-drill-videos" style="margin-top:12px"></div>
+      </div>
     </div>
   </div><!-- /fittab-boxing -->
 
@@ -1016,7 +1052,7 @@
     <div class="card">
       <div class="card-header">
         <h2 style="margin:0">All Transactions</h2>
-        <select id="budget-filter" onchange="renderBudget()" style="width:auto;padding:5px 10px;font-size:12px">
+        <select id="budget-filter" onchange="renderBudget()" style="width:auto;padding:6px 10px;font-size:16px">
           <option value="week">This Week</option>
           <option value="month">This Month</option>
           <option value="all">All Time</option>
@@ -1223,7 +1259,7 @@
     <div class="card">
       <div class="card-header">
         <h2 style="margin:0">Gray's History</h2>
-        <select id="gray-filter" onchange="renderGray()" style="width:auto;padding:5px 10px;font-size:12px">
+        <select id="gray-filter" onchange="renderGray()" style="width:auto;padding:6px 10px;font-size:16px">
           <option value="week">This Week</option>
           <option value="month">This Month</option>
           <option value="all">All Time</option>
@@ -1360,7 +1396,7 @@
   <div class="card" id="weight-chart-card" style="display:none">
     <div class="card-header" style="margin-bottom:10px">
       <h2 style="margin:0">Weight Trend</h2>
-      <select id="weight-range" onchange="renderWeightChart()" style="width:auto;padding:5px 10px;font-size:12px">
+      <select id="weight-range" onchange="renderWeightChart()" style="width:auto;padding:6px 10px;font-size:16px">
         <option value="30">30 days</option>
         <option value="90">90 days</option>
         <option value="365">1 year</option>
@@ -1495,7 +1531,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.0.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.2.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1570,9 +1606,13 @@ function showPage(id) {
   renderPage(id);
 }
 function goPage(id) { showPage(id); }
+function toggleCollapse(id) {
+  const el = document.getElementById(id);
+  if(el) el.classList.toggle('collapsed');
+}
 function renderPage(id) {
   if(id==='dashboard') renderDashboard();
-  if(id==='fitness') { renderWorkouts(); renderEquipment(); initRoutineDB(); if(fitTab==='routines') renderRoutines(); updateAiBadge(); }
+  if(id==='fitness') { renderWorkouts(); renderEquipment(); initRoutineDB(); if(fitTab==='routines') renderRoutines(); updateAiBadge(); renderCardioFields(); }
   if(id==='meals') renderMeals2();
   if(id==='budget') { initBudgetDB(); renderBudget(); }
   if(id==='meds') renderMeds();
@@ -1640,16 +1680,86 @@ function deleteWorkout(id) {
 }
 
 // ===== CARDIO MACHINE LOGGER =====
+// Field definitions per machine — id, label, attrs
+const CARDIO_FIELDS = {
+  'Treadmill': [
+    {id:'dur',label:'Duration (min)',ph:'e.g. 20'},
+    {id:'dist',label:'Distance (mi)',step:'0.01',ph:'opt'},
+    {id:'speed',label:'Avg Speed (mph)',step:'0.1',ph:'opt'},
+    {id:'incline',label:'Incline (%)',step:'0.5',ph:'opt'},
+    {id:'cals',label:'⌚ Calories',ph:'opt'},
+    {id:'hr',label:'Avg HR',ph:'opt'}
+  ],
+  'Stair Climber': [
+    {id:'dur',label:'Duration (min)',ph:'e.g. 15'},
+    {id:'level',label:'Level',ph:'opt'},
+    {id:'floors',label:'Floors / Steps',ph:'opt'},
+    {id:'cals',label:'⌚ Calories',ph:'opt'},
+    {id:'hr',label:'Avg HR',ph:'opt'}
+  ],
+  'Bike': [
+    {id:'dur',label:'Duration (min)',ph:'e.g. 25'},
+    {id:'dist',label:'Distance (mi)',step:'0.01',ph:'opt'},
+    {id:'level',label:'Resistance Level',ph:'opt'},
+    {id:'cals',label:'⌚ Calories',ph:'opt'},
+    {id:'hr',label:'Avg HR',ph:'opt'}
+  ],
+  'Elliptical': [
+    {id:'dur',label:'Duration (min)',ph:'e.g. 20'},
+    {id:'dist',label:'Distance (mi)',step:'0.01',ph:'opt'},
+    {id:'level',label:'Resistance Level',ph:'opt'},
+    {id:'cals',label:'⌚ Calories',ph:'opt'},
+    {id:'hr',label:'Avg HR',ph:'opt'}
+  ],
+  'Rower': [
+    {id:'dur',label:'Duration (min)',ph:'e.g. 15'},
+    {id:'meters',label:'Distance (m)',ph:'opt'},
+    {id:'split',label:'Avg /500m',ph:'opt'},
+    {id:'cals',label:'⌚ Calories',ph:'opt'},
+    {id:'hr',label:'Avg HR',ph:'opt'}
+  ],
+  'Other Cardio': [
+    {id:'dur',label:'Duration (min)',ph:'e.g. 20'},
+    {id:'dist',label:'Distance (mi)',step:'0.01',ph:'opt'},
+    {id:'cals',label:'⌚ Calories',ph:'opt'},
+    {id:'hr',label:'Avg HR',ph:'opt'}
+  ]
+};
+function renderCardioFields() {
+  const machine = document.getElementById('cardio-machine').value;
+  const fields = CARDIO_FIELDS[machine] || CARDIO_FIELDS['Other Cardio'];
+  // chunk into rows of up to 3
+  let html = '';
+  for(let i=0;i<fields.length;i+=3){
+    const row = fields.slice(i,i+3);
+    const cls = row.length===1?'':row.length===2?'ir-2':'ir-3';
+    html += `<div class="input-row ${cls}">` + row.map(f=>
+      `<div><label>${f.label}</label><input type="number" id="cardio-${f.id}" ${f.step?`step="${f.step}"`:''} min="0" placeholder="${f.ph||''}"></div>`
+    ).join('') + `</div>`;
+  }
+  document.getElementById('cardio-fields').innerHTML = html;
+}
+function getCardioVal(id) { const el=document.getElementById('cardio-'+id); return el?el.value:''; }
+
 function logCardioManual() {
   const machine = document.getElementById('cardio-machine').value;
-  const dur = document.getElementById('cardio-dur').value;
-  const dist = document.getElementById('cardio-dist').value;
-  const cals = document.getElementById('cardio-cals').value;
-  const hr = document.getElementById('cardio-hr').value;
-  if(!dur && !dist && !cals) { toast('Enter at least duration, distance, or calories'); return; }
+  const fields = CARDIO_FIELDS[machine];
+  const dur = getCardioVal('dur');
+  const cals = getCardioVal('cals');
+  // require at least something meaningful
+  const hasData = fields.some(f => getCardioVal(f.id));
+  if(!hasData) { toast('Enter at least one value'); return; }
+  // Build notes from all non-duration/non-cal fields that have values
   const noteParts = [];
-  if(dist) noteParts.push(dist+' mi');
-  if(hr) noteParts.push('avg HR '+hr);
+  fields.forEach(f => {
+    if(f.id==='dur'||f.id==='cals') return;
+    const v = getCardioVal(f.id);
+    if(v) {
+      const unit = f.id==='dist'?' mi':f.id==='speed'?' mph':f.id==='incline'?'% incline':f.id==='meters'?'m':f.id==='split'?'/500m':f.id==='floors'?' floors':f.id==='level'?'':'';
+      const lbl = f.id==='hr'?'avg HR ':f.id==='level'?'level ':'';
+      noteParts.push(lbl + v + unit);
+    }
+  });
   DB.workouts.unshift({
     id: uid(), name: machine, cat: 'Cardio',
     sets:'', reps:'', weight:'', dur: dur||'', cals: cals||'',
@@ -1658,7 +1768,7 @@ function logCardioManual() {
   save();
   const realCal = parseInt(cals)||0;
   toast(`${machine} logged ✓ ${realCal?'⌚'+realCal:'~'+estimateCalories({cat:'Cardio',dur})} cal`);
-  ['cardio-dur','cardio-dist','cardio-cals','cardio-hr'].forEach(id=>document.getElementById(id).value='');
+  fields.forEach(f => { const el=document.getElementById('cardio-'+f.id); if(el) el.value=''; });
   document.getElementById('cardio-photo-result').innerHTML='';
   renderWorkouts();
 }
@@ -1682,19 +1792,20 @@ function handleCardioPhoto(event) {
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
       const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
       try {
-        const prompt = `This is a photo of a cardio machine's summary/workout screen (treadmill, stair climber, bike, etc.). Read the numbers and respond ONLY with valid JSON, no markdown:
-{ "machine": "Treadmill|Stair Climber|Bike|Elliptical|Rower|Other Cardio", "duration_min": number_or_null, "distance_mi": number_or_null, "calories": number_or_null, "avg_hr": number_or_null }
+        const prompt = `This is a photo of a cardio machine's summary/workout screen. Read the numbers and respond ONLY with valid JSON, no markdown:
+{ "machine": "Treadmill|Stair Climber|Bike|Elliptical|Rower|Other Cardio", "duration_min": number_or_null, "distance_mi": number_or_null, "speed_mph": number_or_null, "incline_pct": number_or_null, "level": number_or_null, "floors": number_or_null, "calories": number_or_null, "avg_hr": number_or_null }
 If a value isn't visible use null. Convert any MM:SS time to total minutes (rounded).`;
         const text = await callAIWithImage(prompt, base64, 400);
         const clean = text.replace(/```json|```/g,'').trim();
         const m = clean.match(/\{[\s\S]*\}/);
         const data = JSON.parse(m ? m[0] : clean);
-        if(data.machine) document.getElementById('cardio-machine').value = data.machine;
-        if(data.duration_min!=null) document.getElementById('cardio-dur').value = data.duration_min;
-        if(data.distance_mi!=null) document.getElementById('cardio-dist').value = data.distance_mi;
-        if(data.calories!=null) document.getElementById('cardio-cals').value = data.calories;
-        if(data.avg_hr!=null) document.getElementById('cardio-hr').value = data.avg_hr;
-        result.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:10px">✓ Read the screen — check the values below, fix anything off, then tap "Log Cardio"</p>`;
+        if(data.machine) { document.getElementById('cardio-machine').value = data.machine; }
+        renderCardioFields(); // build fields for that machine
+        const setIf = (id,val)=>{ const el=document.getElementById('cardio-'+id); if(el&&val!=null) el.value=val; };
+        setIf('dur',data.duration_min); setIf('dist',data.distance_mi); setIf('speed',data.speed_mph);
+        setIf('incline',data.incline_pct); setIf('level',data.level); setIf('floors',data.floors);
+        setIf('cals',data.calories); setIf('hr',data.avg_hr);
+        result.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:10px">✓ Read the screen — check the values, fix anything off, then tap "Log Cardio"</p>`;
       } catch(err) {
         result.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--accent2);margin-top:10px">Couldn't read it (${err.message}). Just type the numbers below instead.</p>`;
       } finally {
@@ -3660,6 +3771,27 @@ function boxBeep() {
   playTone(660, 0.3, 0.25);
   if(navigator.vibrate) navigator.vibrate(100);
 }
+// === BOXING DRILLS ===
+const BOX_DRILLS = [
+  { name: 'The Basics', combos: ['1-2 (jab-cross)','1-1-2 (double jab, cross)','1-2-3 (jab-cross-hook)'], note: 'Master these before anything else.' },
+  { name: 'Head & Body', combos: ['1-2-3b (3 to the body)','1-2-5 (jab-cross-uppercut)','2-3-2 (cross-hook-cross)'], note: 'Mix levels to keep opponents guessing.' },
+  { name: 'Combos w/ Defense', combos: ['1-2, slip, 2','1-2-3, roll, 2','jab, slip, 1-2'], note: 'Always return to guard after combos.' },
+  { name: 'Power Finishers', combos: ['1-2-3-4','1-6-3-2','2-3-2-3'], note: 'Throw with intent, breathe out on each punch.' }
+];
+function renderBoxDrills() {
+  const el = document.getElementById('box-drills-list');
+  if(!el) return;
+  el.innerHTML = BOX_DRILLS.map(d => `
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px">${d.name}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+        ${d.combos.map(c=>`<span class="tag" style="background:var(--bg2);color:var(--accent)">${c}</span>`).join('')}
+      </div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">${d.note}</div>
+    </div>`).join('');
+}
+function boxDrillVideos(query) { showYtClips(query, 'box-drill-videos'); }
+
 function boxLogSession() {
   const totalMin = Math.round((boxConfig.rounds*(boxConfig.work+boxConfig.rest))/60);
   DB.workouts.unshift({
@@ -4526,7 +4658,7 @@ function switchFitTab(tab, el) {
   if(tab==='equipment') renderEquipment();
   if(tab==='routines') renderRoutines();
   if(tab==='mobility') renderMobility();
-  if(tab==='boxing') { boxUpdateDisplay(); boxLoadOpts(); renderSavedBoxPresets(); populateVoiceDropdown(); }
+  if(tab==='boxing') { boxUpdateDisplay(); boxLoadOpts(); renderSavedBoxPresets(); populateVoiceDropdown(); renderBoxDrills(); }
 }
 
 // ---- Builder ----
@@ -4790,7 +4922,7 @@ function renderBuilderList() {
     // Build the measurement inputs based on unit
     let measureInputs;
     if(isCardio && unit!=='interval') {
-      measureInputs = `<input type="number" value="${ex.dur||''}" placeholder="min" onchange="builderExercises[${i}].dur=this.value" style="width:70px;padding:4px 8px;font-size:11px"><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min</span>`;
+      measureInputs = `<input type="number" value="${ex.dur||''}" placeholder="min" onchange="builderExercises[${i}].dur=this.value" style="width:70px;padding:6px 10px;font-size:16px"><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min</span>`;
     } else if(unit==='seconds') {
       measureInputs = `<input type="number" value="${ex.sets||''}" placeholder="sets" onchange="builderExercises[${i}].sets=this.value" style="width:50px;padding:4px 6px;font-size:11px">
         <input type="number" value="${ex.reps||''}" placeholder="sec" onchange="builderExercises[${i}].reps=this.value" style="width:55px;padding:4px 6px;font-size:11px"><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">sec hold</span>`;
@@ -5016,7 +5148,7 @@ function openRoutineDetail(id) {
             <input type="number" id="rlog-secs-${i}" value="${ex.reps||''}" placeholder="sec" style="width:54px;padding:4px 6px;font-size:11px">
             <button class="btn btn-ghost btn-sm" onclick="startHoldTimer(${ex.reps||30})" title="Start countdown">▶ ${ex.reps||30}s</button>`;
         } else if(ex.cat==='Cardio') {
-          logInputs = `<input type="number" id="rlog-dur-${i}" value="${ex.dur||''}" placeholder="min" style="width:70px;padding:4px 8px;font-size:11px"><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min</span>`;
+          logInputs = `<input type="number" id="rlog-dur-${i}" value="${ex.dur||''}" placeholder="min" style="width:70px;padding:6px 10px;font-size:16px"><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min</span>`;
         } else {
           logInputs = `<input type="number" id="rlog-sets-${i}" value="${ex.sets||''}" placeholder="sets" style="width:48px;padding:4px 6px;font-size:11px">
             <input type="number" id="rlog-reps-${i}" value="${ex.reps||''}" placeholder="reps" style="width:48px;padding:4px 6px;font-size:11px">
