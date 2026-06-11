@@ -1567,7 +1567,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.4.1</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.4.2</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -4614,11 +4614,13 @@ function addMobilityFromAI(m) {
 async function showMobilityDemo(name, boxId) {
   const box = document.getElementById(boxId);
   if(!box) return;
+  // Toggle: if already showing, close it
+  if(box.innerHTML.trim() !== '') { box.innerHTML = ''; return; }
   const ytBoxId = boxId + '-yt';
-  box.innerHTML = `<div id="${ytBoxId}"></div>
+  box.innerHTML = `<div style="display:flex;justify-content:flex-end"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('${boxId}').innerHTML=''">✕ Close demo</button></div>
+    <div id="${ytBoxId}"></div>
     <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="showDemoInline('${name.replace(/'/g,"")}','${boxId}-gif')">🖼 Try GIF instead</button>
     <div class="demo-media" id="${boxId}-gif"></div>`;
-  // immediately load YouTube clips
   showYtClips(name + ' stretch mobility', ytBoxId);
 }
 
@@ -4710,6 +4712,8 @@ function stopRestTimer() {
 async function showDemoInline(exName, boxId) {
   const box = document.getElementById(boxId);
   if(!box) return;
+  // Toggle: if demo already showing, close it
+  if(box.innerHTML.trim() !== '') { box.innerHTML = ''; return; }
   const ytBoxId = boxId + '-yt';
   box.innerHTML = '<div class="ai-loading show"><div class="ai-spinner"></div>Finding demo...</div>';
   const idx = await loadExDbIndex();
@@ -4723,7 +4727,7 @@ async function showDemoInline(exName, boxId) {
     if(score > bestScore) { bestScore = score; best = ex; }
   });
 
-  let html = '';
+  let html = '<div style="display:flex;justify-content:flex-end"><button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'' + boxId + '\').innerHTML=\'\'">✕ Close demo</button></div>';
   if(best && bestScore >= 0.5 && best.images && best.images.length) {
     html += `<div class="equip-detail-label">Demo — ${best.name}</div>`;
     best.images.forEach(img => {
