@@ -672,6 +672,11 @@
         <label style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--text);cursor:pointer;margin-bottom:8px">
           <input type="checkbox" id="box-voice" checked onchange="boxSaveOpts()" style="width:auto;margin:0"> 🎙 Voice announcer (intro + round calls)
         </label>
+        <div id="box-voice-pick" style="margin:0 0 10px 24px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">Voice:</span>
+          <select id="box-voice-select" onchange="boxPickVoice()" style="width:auto;max-width:200px;padding:4px 8px;font-size:11px"></select>
+          <button class="btn btn-ghost btn-sm" onclick="boxTestVoice()">▶ Test</button>
+        </div>
         <label style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--text);cursor:pointer">
           <input type="checkbox" id="box-combos" onchange="boxSaveOpts()" style="width:auto;margin:0"> 🥊 Combo callouts during rounds
         </label>
@@ -1382,6 +1387,22 @@
     </div>
   </div>
   <div class="card">
+    <h2>🍽 Meals AI</h2>
+    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:14px">Powers meal calorie estimates. Can be a different provider than your workout AI. Uses the key saved above for whichever provider you pick. Groq is great here.</p>
+    <div class="input-row"><div>
+      <label>Meals Provider</label>
+      <select id="meal-provider-settings" onchange="onMealProviderChange()">
+        <option value="groq">Groq (free, fast — default)</option>
+        <option value="gemini">Google Gemini</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="claude">Anthropic Claude</option>
+      </select>
+    </div></div>
+    <div id="meal-provider-help" style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:6px"></div>
+    <div class="settings-status" id="meal-key-status"></div>
+    <p style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px">Meal photo identification always uses Gemini (the only one that reads images).</p>
+  </div>
+  <div class="card">
     <h2>🎥 YouTube Clips (optional)</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:14px">For embedded exercise video clips. Get a key at console.cloud.google.com → create project → enable "YouTube Data API v3" → Credentials → API key. Free: ~100 searches/day.</p>
     <div class="api-key-wrap">
@@ -1408,7 +1429,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v2.8.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v2.8.3</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -2830,6 +2851,26 @@ function renderWeightChart() {
 
 // ===== MEAL TRACKER =====
 function getMealProvider() { return localStorage.getItem('healthhub_meal_provider') || 'groq'; }
+
+function onMealProviderChange() {
+  const p = document.getElementById('meal-provider-settings').value;
+  localStorage.setItem('healthhub_meal_provider', p);
+  updateMealBadge();
+  renderMealSettings();
+}
+function renderMealSettings() {
+  const p = getMealProvider();
+  const sel = document.getElementById('meal-provider-settings');
+  if(sel) sel.value = p;
+  const help = document.getElementById('meal-provider-help');
+  const status = document.getElementById('meal-key-status');
+  const hasKey = !!localStorage.getItem('healthhub_apikey_'+p);
+  if(help) help.textContent = AI_PROVIDERS[p]?.help || '';
+  if(status) {
+    if(hasKey) { status.textContent = '✓ '+AI_PROVIDERS[p].label+' key found'; status.style.color='var(--accent)'; }
+    else { status.textContent = '⚠ No '+AI_PROVIDERS[p].label+' key saved — add it in the AI Provider card above (select '+AI_PROVIDERS[p].label+', paste key, Save)'; status.style.color='var(--accent2)'; }
+  }
+}
 function saveMealProvider() {
   const p = document.getElementById('meal-provider').value;
   localStorage.setItem('healthhub_meal_provider', p);
@@ -3130,15 +3171,73 @@ function boxLoadOpts() {
   if(cset) cset.style.display=(o.comboStyle==='set')?'inline-block':'none';
 }
 
-// Text-to-speech announcer
+// Text-to-speech announcer — picks the best available voice
+let _boxVoice = null;
+function allEnglishVoices() {
+  return speechSynthesis.getVoices().filter(v => /en[-_]/i.test(v.lang));
+}
+function pickBoxVoice() {
+  // user-chosen voice wins
+  const saved = localStorage.getItem('healthhub_box_voice');
+  if(saved) {
+    const v = speechSynthesis.getVoices().find(x => x.name === saved);
+    if(v) return v;
+  }
+  const voices = speechSynthesis.getVoices();
+  if(!voices.length) return null;
+  const prefs = [
+    v => /en-GB/i.test(v.lang) && /daniel|arthur|male/i.test(v.name) && /enhanced|premium/i.test(v.name),
+    v => /en-GB/i.test(v.lang) && /daniel|arthur/i.test(v.name),
+    v => /en-GB/i.test(v.lang) && /male/i.test(v.name),
+    v => /daniel|arthur|aaron|fred|male/i.test(v.name) && /enhanced|premium/i.test(v.name),
+    v => /daniel|arthur|aaron/i.test(v.name),
+    v => /en-GB/i.test(v.lang),
+    v => /en[-_]/i.test(v.lang)
+  ];
+  for(const test of prefs) { const f = voices.find(test); if(f) return f; }
+  return voices[0];
+}
+function populateVoiceDropdown() {
+  const sel = document.getElementById('box-voice-select');
+  if(!sel) return;
+  const voices = allEnglishVoices();
+  if(!voices.length) { sel.innerHTML = '<option>Loading voices...</option>'; return; }
+  const current = _boxVoice?.name || localStorage.getItem('healthhub_box_voice') || '';
+  sel.innerHTML = voices.map(v => {
+    const nice = v.name.replace(/\(.*?\)/g,'').trim();
+    const region = /en-GB/i.test(v.lang)?'🇬🇧':/en-US/i.test(v.lang)?'🇺🇸':/en-AU/i.test(v.lang)?'🇦🇺':'';
+    return `<option value="${v.name}" ${v.name===current?'selected':''}>${region} ${nice}</option>`;
+  }).join('');
+}
+function boxPickVoice() {
+  const name = document.getElementById('box-voice-select').value;
+  localStorage.setItem('healthhub_box_voice', name);
+  _boxVoice = speechSynthesis.getVoices().find(v => v.name === name) || null;
+}
+function boxTestVoice() {
+  const o = getBoxOpts();
+  // temporarily force voice on for the test
+  const u = new SpeechSynthesisUtterance('Round one. Fight! 1, 2, 3. Go crazy!');
+  if(!_boxVoice) _boxVoice = pickBoxVoice();
+  if(_boxVoice) u.voice = _boxVoice;
+  u.rate = 0.95; u.pitch = 0.85; u.lang = _boxVoice?.lang || 'en-GB';
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
 function boxSay(text, rate) {
   if(!getBoxOpts().voice) return;
   try {
+    if(!_boxVoice) _boxVoice = pickBoxVoice();
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = rate || 1; u.pitch = 0.9; u.volume = 1;
-    speechSynthesis.cancel(); // don't stack
+    if(_boxVoice) u.voice = _boxVoice;
+    u.rate = rate || 0.95; u.pitch = 0.85; u.volume = 1;
+    u.lang = _boxVoice?.lang || 'en-GB';
+    speechSynthesis.cancel();
     speechSynthesis.speak(u);
   } catch(e) {}
+}
+// voices load async on some browsers
+if(typeof speechSynthesis!=='undefined') {
+  speechSynthesis.onvoiceschanged = () => { _boxVoice = pickBoxVoice(); populateVoiceDropdown(); };
 }
 
 // Saved custom presets
@@ -3217,7 +3316,7 @@ function boxUpdateDisplay() {
 }
 function boxReset() {
   clearInterval(boxState.interval);
-  clearInterval(boxComboTimer);
+  clearTimeout(boxComboTimer);
   try { speechSynthesis.cancel(); } catch(e){}
   boxState = { round:1, phase:'ready', remaining:boxConfig.work, running:false, interval:null };
   document.getElementById('box-start-btn').textContent = '▶ Start';
@@ -3225,7 +3324,7 @@ function boxReset() {
 }
 function boxToggle() {
   if(boxState.running) { // pause
-    clearInterval(boxState.interval); clearInterval(boxComboTimer); boxState.running=false;
+    clearInterval(boxState.interval); clearTimeout(boxComboTimer); boxState.running=false;
     try { speechSynthesis.cancel(); } catch(e){}
     document.getElementById('box-start-btn').textContent = '▶ Resume';
     return;
@@ -3253,10 +3352,17 @@ function boxTick() {
     boxUpdateDisplay(); return;
   }
 
-  if(boxState.remaining===10) { boxBeep(); boxSay('Ten seconds'); }
+  if(boxState.remaining===10) {
+    boxBeep();
+    boxSay('Ten seconds');
+    // If combos are on, hype finisher after the warning
+    if(getBoxOpts().combos && boxState.phase==='work') {
+      setTimeout(()=>{ if(boxState.running && boxState.phase==='work') comboSay('Go crazy!'); }, 1600);
+    }
+  }
   if(boxState.remaining<=0) {
     if(boxState.phase==='work') {
-      clearInterval(boxComboTimer);
+      clearTimeout(boxComboTimer);
       if(boxState.round >= boxConfig.rounds) {
         boxBell(3); boxState.phase='done'; boxState.running=false;
         clearInterval(boxState.interval);
@@ -3283,31 +3389,44 @@ function boxTick() {
 
 // ---- Combo callouts ----
 function startComboCallouts() {
-  clearInterval(boxComboTimer);
+  clearTimeout(boxComboTimer);
   const o = getBoxOpts();
   if(!o.combos || !o.voice) return;
-  // call a combo every 8-15 sec during the round
+  // Evenly spaced calls every ~10 sec, but skip if speech is mid-sentence to avoid collisions
   const fire = () => {
     if(boxState.phase!=='work' || !boxState.running) return;
-    boxSay(generateCombo(o), 1.05);
-    const next = (8 + Math.random()*7) * 1000;
-    boxComboTimer = setTimeout(fire, next);
+    // don't fire in the last 12 sec (let the "10 seconds" call land clean)
+    if(boxState.remaining > 12 && !speechSynthesis.speaking) {
+      comboSay(generateCombo(o));
+    }
+    boxComboTimer = setTimeout(fire, 10000); // steady 10-sec cadence
   };
-  boxComboTimer = setTimeout(fire, 4000); // first combo 4s into round
+  boxComboTimer = setTimeout(fire, 6000); // first combo 6s into round
+}
+// Combo speech that does NOT cancel — so it won't cut off round calls and vice-versa
+function comboSay(text) {
+  if(!getBoxOpts().voice) return;
+  try {
+    if(!_boxVoice) _boxVoice = pickBoxVoice();
+    const u = new SpeechSynthesisUtterance(text);
+    if(_boxVoice) u.voice = _boxVoice;
+    u.rate = 1.1; u.pitch = 0.9; u.volume = 1;
+    u.lang = _boxVoice?.lang || 'en-GB';
+    speechSynthesis.speak(u); // no cancel — queues naturally
+  } catch(e) {}
 }
 function generateCombo(o) {
   if(o.comboStyle==='set' && o.comboSet) {
-    return o.comboSet.split(/[-\s,]+/).filter(Boolean).join(' ');
+    return o.comboSet.split(/[-\s,]+/).filter(Boolean).join(', ');
   }
   if(o.comboStyle==='basic') {
     const basics = [[1,2],[1,2,3],[1,1,2],[1,2,5],[2,3,2],[1,6,3]];
-    return basics[Math.floor(Math.random()*basics.length)].join(' ');
+    return basics[Math.floor(Math.random()*basics.length)].join(', ');
   }
-  // random: 2-4 punches, 1-6
   const len = 2 + Math.floor(Math.random()*3);
   const c = [];
   for(let i=0;i<len;i++) c.push(1+Math.floor(Math.random()*6));
-  return c.join(' ');
+  return c.join(', ');
 }
 // Bell sound (n rings)
 function boxBell(n) {
@@ -3497,6 +3616,7 @@ function renderSettings() {
   const ytStatus = document.getElementById('yt-status');
   if(ytInp) ytInp.value = getYtKey();
   if(ytStatus) { const yk=getYtKey(); ytStatus.textContent = yk?'✓ YouTube key saved':'No YouTube key'; ytStatus.style.color = yk?'var(--accent)':'var(--muted)'; }
+  renderMealSettings();
 }
 
 // ===== DATA EXPORT/IMPORT =====
@@ -4162,7 +4282,7 @@ function switchFitTab(tab, el) {
   if(tab==='equipment') renderEquipment();
   if(tab==='routines') renderRoutines();
   if(tab==='mobility') renderMobility();
-  if(tab==='boxing') { boxUpdateDisplay(); boxLoadOpts(); renderSavedBoxPresets(); }
+  if(tab==='boxing') { boxUpdateDisplay(); boxLoadOpts(); renderSavedBoxPresets(); populateVoiceDropdown(); }
 }
 
 // ---- Builder ----
