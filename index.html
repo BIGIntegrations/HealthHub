@@ -97,13 +97,14 @@
   /* DASHBOARD */
   .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
   .dash-bottom { display: grid; grid-template-columns: 1fr; gap: 16px; }
-  @media(min-width: 720px) { .dash-bottom { grid-template-columns: 1fr 1fr; } }
   .collapse-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
   .collapse-head h2 { margin: 0; }
   .collapse-chevron { font-family: var(--mono); font-size: 13px; color: var(--muted); transition: transform .2s; flex-shrink: 0; }
   .collapse-card.collapsed .collapse-body { display: none; }
   .collapse-card.collapsed .collapse-chevron { transform: rotate(-90deg); }
   .collapse-card .collapse-body { margin-top: 12px; }
+  .hint-chip { font-family: var(--mono); font-size: 11px; color: var(--accent); background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; padding: 5px 11px; cursor: pointer; white-space: nowrap; transition: all .15s; }
+  .hint-chip:hover, .hint-chip:active { border-color: var(--accent); background: var(--bg2); }
   .dash-tile { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--card-r); padding: 18px; position: relative; overflow: hidden; transition: border-color .2s; }
   .dash-tile:hover { border-color: var(--accent); }
   .dash-tile .dt-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
@@ -455,12 +456,12 @@
   <div class="dash-grid" id="dash-tiles"></div>
   <div class="dash-bottom">
     <div class="card">
-      <h2>Today's Meds</h2>
-      <div id="dash-meds-list"></div>
-    </div>
-    <div class="card">
       <h2>Recent Workouts</h2>
       <div id="dash-workouts-list"></div>
+    </div>
+    <div class="card">
+      <h2>Today's Meds</h2>
+      <div id="dash-meds-list"></div>
     </div>
   </div>
 </div>
@@ -484,7 +485,7 @@
   <!-- LOG TAB -->
   <div id="fittab-log" class="fittab">
   <!-- AI WORKOUT ASSISTANT -->
-  <div class="card collapse-card" id="cc-ai">
+  <div class="card collapse-card collapsed" id="cc-ai">
     <div class="collapse-head" onclick="toggleCollapse('cc-ai')">
       <h2>🤖 AI Workout Assistant</h2>
       <div style="display:flex;align-items:center;gap:8px">
@@ -760,13 +761,30 @@
         <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:12px">Beginner combos to drill. Numbers = punches (1=jab, 2=cross, 3=lead hook, 4=rear hook, 5=lead uppercut, 6=rear uppercut).</p>
         <div id="box-drills-list"></div>
         <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Watch technique</div>
-        <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:10px">Pull boxing drill videos from YouTube (needs YouTube key in Settings).</p>
+        <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:10px">Search any boxing topic or tap a preset (needs YouTube key in Settings).</p>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input id="box-video-search" placeholder="e.g. southpaw defense, Tyson peekaboo..." style="flex:1" onkeydown="if(event.key==='Enter')boxSearchVideos()">
+          <button class="btn btn-primary" onclick="boxSearchVideos()" style="white-space:nowrap">🎥 Search</button>
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:6px">Try:</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+          <span class="hint-chip" onclick="boxHintSearch('southpaw defense')">southpaw defense</span>
+          <span class="hint-chip" onclick="boxHintSearch('Tyson peekaboo')">Tyson peekaboo</span>
+          <span class="hint-chip" onclick="boxHintSearch('speed bag tutorial')">speed bag</span>
+          <span class="hint-chip" onclick="boxHintSearch('Canelo body shots')">Canelo body shots</span>
+          <span class="hint-chip" onclick="boxHintSearch('Philly shell defense')">Philly shell</span>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('beginner boxing combinations')">🎥 Beginner Combos</button>
-          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('boxing footwork drills')">🎥 Footwork</button>
-          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('heavy bag workout routine')">🎥 Bag Work</button>
+          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('beginner boxing combinations')">Beginner Combos</button>
+          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('boxing footwork drills')">Footwork</button>
+          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('heavy bag workout routine')">Bag Work</button>
+          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('boxing defense slipping drills')">Defense</button>
+          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('boxing counterpunching technique')">Counters</button>
+          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('jump rope boxing conditioning')">Jump Rope</button>
+          <button class="btn btn-ghost btn-sm" onclick="boxDrillVideos('boxing conditioning workout')">Conditioning</button>
         </div>
         <div id="box-drill-videos" style="margin-top:12px"></div>
+        <div id="box-drill-more" style="margin-top:10px"></div>
       </div>
     </div>
   </div><!-- /fittab-boxing -->
@@ -1531,7 +1549,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.2.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.3.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -3790,7 +3808,60 @@ function renderBoxDrills() {
       <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">${d.note}</div>
     </div>`).join('');
 }
-function boxDrillVideos(query) { showYtClips(query, 'box-drill-videos'); }
+function boxDrillVideos(query) { boxRunVideoSearch(query, null); }
+function boxSearchVideos() {
+  const q = document.getElementById('box-video-search').value.trim();
+  if(!q) { toast('Type something to search'); return; }
+  boxRunVideoSearch(q + ' boxing', null);
+}
+function boxHintSearch(q) {
+  const input = document.getElementById('box-video-search');
+  if(input) input.value = q;
+  boxRunVideoSearch(q + ' boxing', null);
+}
+let _boxVidQuery = '';
+let _boxVidToken = '';
+async function boxRunVideoSearch(query, pageToken) {
+  const box = document.getElementById('box-drill-videos');
+  const moreBox = document.getElementById('box-drill-more');
+  const key = getYtKey();
+  if(!key) { box.innerHTML = '<p style="font-family:var(--mono);font-size:11px;color:var(--accent2);margin-top:8px">Add a YouTube API key in ⚙ Settings to load videos.</p>'; moreBox.innerHTML=''; return; }
+  _boxVidQuery = query;
+  if(!pageToken) { box.innerHTML = '<div class="ai-loading show"><div class="ai-spinner"></div>Loading videos...</div>'; moreBox.innerHTML=''; }
+  try {
+    const q = encodeURIComponent(query);
+    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=4&q=${q}&key=${key}`;
+    if(pageToken) url += `&pageToken=${pageToken}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if(data.error) { box.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--danger);margin-top:8px">YouTube error: ${data.error.message}</p>`; return; }
+    if(!data.items || !data.items.length) { box.innerHTML = '<p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px">No videos found.</p>'; return; }
+    _boxVidToken = data.nextPageToken || '';
+    const html = '<div class="demo-yt-wrap">' + data.items.map(it => {
+      const vid = it.id.videoId;
+      const t = it.snippet.title;
+      const thumb = it.snippet.thumbnails?.medium?.url || it.snippet.thumbnails?.default?.url || '';
+      return `<div class="demo-yt-thumb" onclick="playYt('${vid}','box-drill-player')">
+        <img src="${thumb}" alt="">
+        <div class="yt-title">${t.replace(/'/g,"")}</div>
+      </div>`;
+    }).join('') + '<div id="box-drill-player"></div></div>';
+    if(pageToken) {
+      // append to existing
+      const wrap = box.querySelector('.demo-yt-wrap');
+      const player = document.getElementById('box-drill-player');
+      const temp = document.createElement('div'); temp.innerHTML = html;
+      const newThumbs = temp.querySelectorAll('.demo-yt-thumb');
+      newThumbs.forEach(n => wrap.insertBefore(n, player));
+    } else {
+      box.innerHTML = html;
+    }
+    moreBox.innerHTML = _boxVidToken ? '<button class="btn btn-ghost btn-sm" style="width:100%" onclick="boxLoadMoreVideos()">↓ Load more videos</button>' : '';
+  } catch(e) {
+    box.innerHTML = '<p style="font-family:var(--mono);font-size:11px;color:var(--danger);margin-top:8px">Failed to load videos.</p>';
+  }
+}
+function boxLoadMoreVideos() { boxRunVideoSearch(_boxVidQuery, _boxVidToken); }
 
 function boxLogSession() {
   const totalMin = Math.round((boxConfig.rounds*(boxConfig.work+boxConfig.rest))/60);
