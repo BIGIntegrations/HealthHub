@@ -218,7 +218,7 @@
   .rest-timer-controls { display: flex; gap: 8px; flex: 1; flex-wrap: wrap; }
   .rest-preset { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-family: var(--mono); font-size: 12px; cursor: pointer; color: var(--text); transition: all .15s; }
   .rest-preset:hover, .rest-preset.active { border-color: var(--accent); color: var(--accent); }
-  .rest-fab { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); right: 20px; z-index: 150; width: 54px; height: 54px; border-radius: 50%; background: var(--accent); color: #0d0f12; border: none; font-size: 22px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,229,160,.35); display: flex; align-items: center; justify-content: center; }
+  .rest-fab { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); right: 20px; z-index: 150; width: 54px; height: 54px; border-radius: 50%; background: var(--accent); color: #0d0f12; border: none; font-size: 22px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,229,160,.35); display: none; align-items: center; justify-content: center; }
 
   /* ENVELOPE MODAL */
   .env-modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 18px; padding: 24px; width: 100%; max-width: 400px; }
@@ -1429,7 +1429,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v2.9.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v2.9.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1493,8 +1493,15 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  event.currentTarget.classList.add('active');
-  event.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  if(typeof event!=='undefined' && event && event.currentTarget) {
+    event.currentTarget.classList.add('active');
+    event.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+  // Rest-timer button only on Fitness
+  const fab = document.getElementById('rest-fab');
+  if(fab) fab.style.display = (id==='fitness') ? 'flex' : 'none';
+  // If timer panel is open and leaving fitness, hide it too
+  if(id!=='fitness') { const t=document.getElementById('rest-timer'); if(t) t.classList.remove('show'); }
   renderPage(id);
 }
 function renderPage(id) {
