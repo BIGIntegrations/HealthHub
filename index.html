@@ -1429,7 +1429,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v2.9.1</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v2.9.2</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -3245,6 +3245,11 @@ function boxTestVoice() {
 function boxSay(text, rate) {
   if(!getBoxOpts().voice) return;
   try {
+    // always re-read the user's current pick (don't cache stale)
+    const saved = localStorage.getItem('healthhub_box_voice');
+    if(saved && (!_boxVoice || _boxVoice.name !== saved)) {
+      _boxVoice = speechSynthesis.getVoices().find(v=>v.name===saved) || _boxVoice;
+    }
     if(!_boxVoice) _boxVoice = pickBoxVoice();
     const u = new SpeechSynthesisUtterance(text);
     if(_boxVoice) u.voice = _boxVoice;
@@ -3342,6 +3347,7 @@ function boxReset() {
   boxUpdateDisplay();
 }
 function boxToggle() {
+  getAudioCtx(); // unlock audio on user tap
   if(boxState.running) { // pause
     clearInterval(boxState.interval); clearTimeout(boxComboTimer); boxState.running=false;
     try { speechSynthesis.cancel(); } catch(e){}
@@ -3411,25 +3417,36 @@ function startComboCallouts() {
   clearTimeout(boxComboTimer);
   const o = getBoxOpts();
   if(!o.combos || !o.voice) return;
-  // Evenly spaced calls every ~10 sec, but skip if speech is mid-sentence to avoid collisions
   const fire = () => {
     if(boxState.phase!=='work' || !boxState.running) return;
-    // don't fire in the last 12 sec (let the "10 seconds" call land clean)
-    if(boxState.remaining > 12 && !speechSynthesis.speaking) {
-      comboSay(generateCombo(o));
+    // hold callouts in the last 11 sec so the "ten seconds"/"go crazy" lands clean
+    if(boxState.remaining > 11) {
+      const combo = generateCombo(o);
+      comboSay(combo);
+      // delay = time to throw the punches + a short breather, scales with combo length
+      const punchCount = combo.split(/[\s,]+/).filter(Boolean).length;
+      const throwTime = punchCount * 750;   // ~0.75s per punch to execute
+      const breather = 1300 + Math.random()*700; // 1.3-2.0s gap before next
+      boxComboTimer = setTimeout(fire, throwTime + breather);
+    } else {
+      // wait until next round to resume
+      boxComboTimer = setTimeout(fire, 2000);
     }
-    boxComboTimer = setTimeout(fire, 10000); // steady 10-sec cadence
   };
-  boxComboTimer = setTimeout(fire, 6000); // first combo 6s into round
+  boxComboTimer = setTimeout(fire, 2500); // first combo 2.5s into round
 }
 // Combo speech that does NOT cancel — so it won't cut off round calls and vice-versa
 function comboSay(text) {
   if(!getBoxOpts().voice) return;
   try {
+    const saved = localStorage.getItem('healthhub_box_voice');
+    if(saved && (!_boxVoice || _boxVoice.name !== saved)) {
+      _boxVoice = speechSynthesis.getVoices().find(v=>v.name===saved) || _boxVoice;
+    }
     if(!_boxVoice) _boxVoice = pickBoxVoice();
     const u = new SpeechSynthesisUtterance(text);
     if(_boxVoice) u.voice = _boxVoice;
-    u.rate = 1.1; u.pitch = 0.9; u.volume = 1;
+    u.rate = 1.15; u.pitch = 0.9; u.volume = 1;
     u.lang = _boxVoice?.lang || 'en-GB';
     speechSynthesis.speak(u); // no cancel — queues naturally
   } catch(e) {}
@@ -3449,8 +3466,9 @@ function generateCombo(o) {
 }
 // Bell sound (n rings)
 function boxBell(n) {
+  const ctx = getAudioCtx();
+  if(!ctx) return;
   try {
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
     for(let i=0;i<n;i++){
       const t = ctx.currentTime + i*0.18;
       const o = ctx.createOscillator(), g = ctx.createGain();
@@ -3464,15 +3482,7 @@ function boxBell(n) {
   } catch(e){}
 }
 function boxBeep() {
-  try {
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
-    const o=ctx.createOscillator(), g=ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.value=660; o.type='sine';
-    g.gain.setValueAtTime(0.25,ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);
-    o.start(); o.stop(ctx.currentTime+0.3);
-  } catch(e){}
+  playTone(660, 0.3, 0.25);
   if(navigator.vibrate) navigator.vibrate(100);
 }
 function boxLogSession() {
@@ -4137,6 +4147,29 @@ async function showMobilityDemo(name, boxId) {
 async function showDemo(exName) { return showDemoInline(exName, 'demo-media-box'); }
 
 // ===== REST TIMER =====
+// Shared audio context, unlocked on first user tap (iOS requirement)
+let _audioCtx = null;
+function getAudioCtx() {
+  if(!_audioCtx) {
+    try { _audioCtx = new (window.AudioContext||window.webkitAudioContext)(); } catch(e) { return null; }
+  }
+  if(_audioCtx && _audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+function playTone(freq, dur, vol) {
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+  try {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = freq; o.type = 'sine';
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol||0.4, t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+(dur||0.3));
+    o.start(t); o.stop(t+(dur||0.3)+0.02);
+  } catch(e) {}
+}
 let restSeconds = 90, restRemaining = 90, restInterval = null, restRunning = false;
 function toggleRestTimer() {
   const t = document.getElementById('rest-timer');
@@ -4164,6 +4197,7 @@ function updateRestDisplay() {
 }
 function startRestTimer() {
   if(restRunning) { stopRestTimer(); return; }
+  getAudioCtx(); // unlock audio on this user tap
   restRunning = true;
   document.getElementById('rest-start-btn').textContent = 'Pause';
   restInterval = setInterval(() => {
@@ -4178,15 +4212,7 @@ function startRestTimer() {
   }, 1000);
 }
 function restBeep() {
-  try {
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
-    const o=ctx.createOscillator(), g=ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.value=660; o.type='sine';
-    g.gain.setValueAtTime(0.25,ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);
-    o.start(); o.stop(ctx.currentTime+0.3);
-  } catch(e){}
+  playTone(660, 0.3, 0.3);
   if(navigator.vibrate) navigator.vibrate(100);
 }
 function stopRestTimer() {
@@ -4197,20 +4223,9 @@ function stopRestTimer() {
 function restDone() {
   updateRestDisplay();
   toast('⏱ Rest over — next set!');
-  try {
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
-    if(ctx.state === 'suspended') ctx.resume();
-    for(let i=0;i<3;i++){
-      const t = ctx.currentTime + i*0.2;
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.frequency.value = 880; o.type = 'sine';
-      g.gain.setValueAtTime(0.0001,t);
-      g.gain.exponentialRampToValueAtTime(0.4,t+0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
-      o.start(t); o.stop(t+0.2);
-    }
-  } catch(e) {}
+  playTone(880, 0.18, 0.4);
+  setTimeout(()=>playTone(880,0.18,0.4), 200);
+  setTimeout(()=>playTone(1100,0.25,0.4), 400);
   if(navigator.vibrate) navigator.vibrate([200,100,200]);
 }
 
