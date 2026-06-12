@@ -454,6 +454,7 @@
   <h1>Dashboard</h1>
   <p class="sub">Your daily overview — <span id="dash-date"></span></p>
   <div class="dash-grid" id="dash-tiles"></div>
+  <div class="card" id="dash-week" style="display:none"></div>
   <div class="dash-bottom">
     <div class="card">
       <h2>Recent Workouts</h2>
@@ -593,7 +594,7 @@
     </div>
   </div>
   <div class="card">
-    <div class="card-header"><h2 style="margin:0">Workout Log</h2>
+    <div class="card-header"><h2 style="margin:0">Workout Log <span id="workout-streak"></span></h2>
       <div style="display:flex;gap:8px;align-items:center">
         <select id="fit-filter" onchange="renderWorkouts()" style="width:auto;padding:6px 10px;font-size:16px">
           <option value="all">All Time</option>
@@ -1377,7 +1378,7 @@
   </div>
   <div class="card">
     <div class="card-header">
-      <h2 style="margin:0">Today — <span id="med-today-date"></span></h2>
+      <h2 style="margin:0">Today — <span id="med-today-date"></span><span id="meds-streak"></span></h2>
       <button class="btn btn-ghost btn-sm" onclick="resetDayMeds()">Reset Day</button>
     </div>
     <div class="med-grid" id="med-grid"></div>
@@ -1477,15 +1478,19 @@
       </div>
       <textarea id="meal-input" placeholder="e.g. 2 scrambled eggs, 2 toast with butter, black coffee" style="min-height:70px;margin-bottom:8px"></textarea>
       <button class="btn btn-primary" style="width:100%" onclick="estimateMeal()">🤖 Estimate & Log</button>
+      <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="openMealPhoto()">📷 Snap a Meal Photo</button>
+      <input type="file" id="meal-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleMealPhoto(event)">
+      <p style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:6px;text-align:center">Photo goes to Gemini for the estimate, then it's discarded — never saved.</p>
       <div class="ai-loading" id="meal-loading"><div class="ai-spinner"></div>Estimating calories...</div>
       <div id="meal-result"></div>
     </div>
 
     <div class="card">
       <div class="card-header" style="margin-bottom:10px">
-        <h2 style="margin:0">Today</h2>
+        <h2 style="margin:0">Today <span id="meal-streak"></span></h2>
         <span style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--accent)" id="meal-today-total">0 cal</span>
       </div>
+      <div id="meal-goal-area" style="margin-bottom:10px"></div>
       <div id="meal-today-list"></div>
     </div>
 
@@ -1567,7 +1572,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.4.3</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.5.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1908,6 +1913,8 @@ function renderWorkouts() {
   const range = document.getElementById('fit-filter')?.value||'all';
   const items = filterItems(DB.workouts, range);
   const el = document.getElementById('workout-list');
+  const wkStreak = document.getElementById('workout-streak');
+  if(wkStreak) wkStreak.innerHTML = streakBadge(computeStreak(DB.workouts.map(w=>w.date)));
   if(!items.length) { el.innerHTML='<div class="empty"><div class="empty-icon">🏋️</div>No workouts yet. Log your first one above!</div>'; return; }
 
   // This-week stats
@@ -3017,6 +3024,12 @@ function resetDayMeds() {
 function renderMeds() {
   document.getElementById('med-today-date').textContent = fmt(today());
   const d = today();
+  // overall streak: days where ALL meds were taken
+  const msEl = document.getElementById('meds-streak');
+  if(msEl && DB.meds.length) {
+    const fullDays = Object.keys(DB.medLog).filter(k => DB.meds.every(m => (DB.medLog[k]||{})[m.id]));
+    msEl.innerHTML = streakBadge(computeStreak(fullDays));
+  } else if(msEl) msEl.innerHTML='';
   const grid = document.getElementById('med-grid');
   const allList = document.getElementById('med-all-list');
   if(!DB.meds.length) {
@@ -3342,28 +3355,97 @@ Respond ONLY with valid JSON, no markdown, no code fences:
 { "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "confidence": "high|medium|low", "breakdown": "one short line listing the items and their rough calories" }`;
   try {
     const text = await callMealAI(prompt, 500);
-    const clean = text.replace(/```json|```/g,'').trim();
-    const m = clean.match(/\{[\s\S]*\}/);
-    const data = JSON.parse(m ? m[0] : clean);
-    window._lastMealEstimate = { input, ...data };
-    const confColor = data.confidence==='high'?'var(--accent)':data.confidence==='medium'?'var(--accent2)':'var(--danger)';
-    result.innerHTML = `
-      <div class="equip-detail show" style="margin-top:14px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="font-size:28px;font-weight:800;color:var(--accent)">${data.calories} <span style="font-size:14px;color:var(--muted)">cal</span></div>
-          <span class="tag" style="color:${confColor}">${data.confidence} confidence</span>
-        </div>
-        <div style="display:flex;gap:12px;margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--text)">
-          <span>P: ${data.protein_g||0}g</span><span>C: ${data.carbs_g||0}g</span><span>F: ${data.fat_g||0}g</span>
-        </div>
-        ${data.breakdown?`<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px">${data.breakdown}</div>`:''}
-        <button class="btn btn-primary btn-sm" style="margin-top:12px;width:100%" onclick="confirmLogMeal()">✓ Add to Today</button>
-      </div>`;
+    const data = parseMealJson(text);
+    renderMealEstimate(data, input);
   } catch(e) {
     result.innerHTML = `<p style="font-family:var(--mono);font-size:12px;color:var(--danger);margin-top:10px">${e.message}</p>`;
   } finally {
     loading.classList.remove('show');
   }
+}
+
+function parseMealJson(text) {
+  const clean = text.replace(/```json|```/g,'').trim();
+  const m = clean.match(/\{[\s\S]*\}/);
+  return JSON.parse(m ? m[0] : clean);
+}
+
+function renderMealEstimate(data, desc) {
+  window._lastMealEstimate = { input: desc, ...data };
+  const result = document.getElementById('meal-result');
+  const confColor = data.confidence==='high'?'var(--accent)':data.confidence==='medium'?'var(--accent2)':'var(--danger)';
+  result.innerHTML = `
+    <div class="equip-detail show" style="margin-top:14px">
+      ${desc?`<div style="font-family:var(--mono);font-size:11px;color:var(--text);margin-bottom:6px">${desc}</div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:28px;font-weight:800;color:var(--accent)">${data.calories} <span style="font-size:14px;color:var(--muted)">cal</span></div>
+        <span class="tag" style="color:${confColor}">${data.confidence} confidence</span>
+      </div>
+      <div style="display:flex;gap:12px;margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--text)">
+        <span>P: ${data.protein_g||0}g</span><span>C: ${data.carbs_g||0}g</span><span>F: ${data.fat_g||0}g</span>
+      </div>
+      ${data.breakdown?`<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px">${data.breakdown}</div>`:''}
+      <button class="btn btn-primary btn-sm" style="margin-top:12px;width:100%" onclick="confirmLogMeal()">✓ Add to Today</button>
+    </div>`;
+}
+
+// --- Meal photo (image discarded after estimate, never stored) ---
+function openMealPhoto() { document.getElementById('meal-photo-input').click(); }
+function handleMealPhoto(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const loading = document.getElementById('meal-loading');
+  const result = document.getElementById('meal-result');
+  result.innerHTML=''; loading.classList.add('show');
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = async () => {
+      const maxDim = 1024;
+      let w = img.width, h = img.height;
+      if(w > h && w > maxDim) { h = h*maxDim/w; w = maxDim; }
+      else if(h > maxDim) { w = w*maxDim/h; h = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+      try {
+        const prompt = `This is a photo of food/a meal. Identify it and estimate the nutrition for the visible portion. Respond ONLY with valid JSON, no markdown:
+{ "meal_name": "short description of what you see", "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "confidence": "high|medium|low", "breakdown": "one short line of items and rough calories" }`;
+        const text = await callAIWithImage(prompt, base64, 500);
+        const data = parseMealJson(text);
+        renderMealEstimate(data, data.meal_name || 'Photo meal');
+      } catch(err) {
+        result.innerHTML = `<p style="font-family:var(--mono);font-size:12px;color:var(--accent2);margin-top:10px">Couldn't read the photo (${err.message}). Type the meal instead.</p>`;
+      } finally {
+        loading.classList.remove('show');
+      }
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
+}
+
+// --- Daily calorie goal (hidden until set) ---
+function setCalGoal() {
+  const cur = localStorage.getItem('healthhub_cal_goal') || '';
+  const v = prompt('Daily calorie goal (blank or 0 to remove):', cur);
+  if(v === null) return;
+  const n = parseInt(v) || 0;
+  if(n > 0) localStorage.setItem('healthhub_cal_goal', n);
+  else localStorage.removeItem('healthhub_cal_goal');
+  renderMeals2();
+}
+
+// --- Quick re-add a past meal ---
+function relogMeal(id) {
+  const m = (DB.meals||[]).find(x => x.id === id);
+  if(!m) return;
+  DB.meals.unshift({ ...m, id: uid(), date: today() });
+  save();
+  toast(`${m.calories} cal re-logged ✓`);
+  renderMeals2();
 }
 
 function confirmLogMeal() {
@@ -3394,6 +3476,26 @@ function renderMeals2() {
   const todayMeals = DB.meals.filter(m=>m.date===d);
   const total = todayMeals.reduce((s,m)=>s+(m.calories||0),0);
   document.getElementById('meal-today-total').textContent = total + ' cal';
+  // streak badge
+  const streakEl = document.getElementById('meal-streak');
+  if(streakEl) { const n = computeStreak(DB.meals.map(m=>m.date)); streakEl.innerHTML = streakBadge(n); }
+  // calorie goal (hidden until set)
+  const ga = document.getElementById('meal-goal-area');
+  if(ga) {
+    const goal = parseInt(localStorage.getItem('healthhub_cal_goal'))||0;
+    if(!goal) {
+      ga.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="setCalGoal()">🎯 Set a daily calorie goal</button>`;
+    } else {
+      const pct = Math.min(100, Math.round(total/goal*100));
+      const over = total > goal;
+      ga.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-family:var(--mono);font-size:10px;color:${over?'var(--danger)':'var(--muted)'}">Goal ${goal} cal · ${over?(total-goal)+' over':(goal-total)+' left'}</span>
+          <button class="btn btn-ghost btn-sm" onclick="setCalGoal()" style="padding:2px 8px">✎</button>
+        </div>
+        <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${over?'var(--danger)':'var(--accent)'};transition:width .3s"></div></div>`;
+    }
+  }
   const typeEmoji = {Breakfast:'🌅',Lunch:'☀️',Dinner:'🌙',Snack:'🍿'};
   const tl = document.getElementById('meal-today-list');
   tl.innerHTML = todayMeals.length ? todayMeals.map(m=>`
@@ -3414,8 +3516,11 @@ function renderMeals2() {
         <div class="li-title">${m.desc}</div>
         <div class="li-meta">${m.type} · ${m.calories} cal · ${fmt(m.date)}</div>
       </div>
-      <button class="btn btn-danger btn-sm" onclick="deleteMeal('${m.id}')">✕</button>
-    </div>`).join('') : '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:8px 0">No meal history yet</div>';
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-sm" onclick="relogMeal('${m.id}')" title="Log again today">↺</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMeal('${m.id}')">✕</button>
+      </div>
+    </div>`).join('') : '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:8px 0">No meal history yet — past meals show here with one-tap re-add</div>';
 }
 
 function renderHealth() {
@@ -3448,6 +3553,20 @@ function renderHealth() {
 }
 
 // ===== DASHBOARD =====
+// ===== STREAKS =====
+function computeStreak(dates) {
+  const set = new Set(dates);
+  let streak = 0;
+  let d = new Date();
+  // allow today not yet logged — streak holds if yesterday has an entry
+  if(!set.has(localDate(d))) { d.setDate(d.getDate()-1); if(!set.has(localDate(d))) return 0; }
+  while(set.has(localDate(d))) { streak++; d.setDate(d.getDate()-1); }
+  return streak;
+}
+function streakBadge(n) {
+  return n >= 2 ? `<span style="font-family:var(--mono);font-size:12px;color:var(--accent2);margin-left:6px">🔥${n}</span>` : '';
+}
+
 function renderDashboard() {
   document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   const d = today();
@@ -3487,6 +3606,44 @@ function renderDashboard() {
       <div class="dt-sub">${todayHealth?[todayHealth.weight&&todayHealth.weight+'lbs',todayHealth.sleep&&todayHealth.sleep+'hrs'].filter(Boolean).join(' · ') || 'Logged':'Not logged yet'}</div>
       <div class="dt-accent" style="background:var(--accent4)"></div>
     </div>`;
+
+  // ===== This Week review =====
+  const weekCard = document.getElementById('dash-week');
+  if(weekCard) {
+    const ws = getWeekStart(), we = getWeekEnd();
+    const weekWorkouts = DB.workouts.filter(w => w.date >= ws && w.date <= we);
+    const weekVol = weekWorkouts.reduce((s,w) => s + exVolume(w), 0);
+    // avg calories across days that have meal logs this week
+    const weekMeals = (DB.meals||[]).filter(m => m.date >= ws && m.date <= we);
+    const mealDays = {};
+    weekMeals.forEach(m => { mealDays[m.date] = (mealDays[m.date]||0) + (m.calories||0); });
+    const dayTotals = Object.values(mealDays);
+    const avgCal = dayTotals.length ? Math.round(dayTotals.reduce((a,b)=>a+b,0)/dayTotals.length) : 0;
+    // meds adherence: taken / possible over elapsed days this week
+    let medPct = null;
+    if(DB.meds.length) {
+      let takenSum = 0, days = 0;
+      const cur = new Date(ws + 'T00:00:00');
+      const todayStr = today();
+      while(localDate(cur) <= todayStr && localDate(cur) <= we) {
+        takenSum += Object.values(DB.medLog[localDate(cur)]||{}).filter(Boolean).length;
+        days++;
+        cur.setDate(cur.getDate()+1);
+      }
+      medPct = days ? Math.round(takenSum/(DB.meds.length*days)*100) : 0;
+    }
+    const stat = (val, lbl) => `<div style="flex:1;min-width:90px"><div style="font-size:20px;font-weight:800;color:var(--accent)">${val}</div><div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">${lbl}</div></div>`;
+    weekCard.style.display = 'block';
+    weekCard.innerHTML = `
+      <h2 style="margin-bottom:10px">This Week</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        ${stat(weekWorkouts.length, 'workouts')}
+        ${stat(weekVol>=1000?(weekVol/1000).toFixed(1)+'k':Math.round(weekVol), 'lbs volume')}
+        ${stat(avgCal||'—', 'avg cal/day')}
+        ${stat(fmtMoney(weekSpent), 'spent')}
+        ${medPct!==null?stat(medPct+'%','meds taken'):''}
+      </div>`;
+  }
 
   // Today's meds
   const medList = document.getElementById('dash-meds-list');
