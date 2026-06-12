@@ -92,6 +92,8 @@
   .btn-danger { background: rgba(255,71,87,.12); color: var(--danger); border: 1px solid rgba(255,71,87,.2); }
   .btn-danger:hover { background: rgba(255,71,87,.22); }
   .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .prange-btn { flex:0 0 auto; padding:6px 14px; font-size:13px; font-family:var(--mono); background:var(--bg2); color:var(--muted); border:1px solid var(--border); border-radius:8px; cursor:pointer; }
+  .prange-btn.active { background:var(--accent); color:#06231a; border-color:var(--accent); font-weight:700; }
   .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 
   /* DASHBOARD */
@@ -586,10 +588,18 @@
     <div class="collapse-body">
       <div id="progress-empty" style="display:none;font-family:var(--mono);font-size:11px;color:var(--muted);padding:8px 0">Log a few workouts across different weeks to see your trends here.</div>
       <div id="progress-charts">
-        <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Weekly Volume (lbs lifted)</div>
+        <div id="progress-range" style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto;-webkit-overflow-scrolling:touch">
+          <button class="prange-btn" data-range="2w" onclick="setProgressRange('2w')">2W</button>
+          <button class="prange-btn" data-range="4w" onclick="setProgressRange('4w')">4W</button>
+          <button class="prange-btn active" data-range="8w" onclick="setProgressRange('8w')">8W</button>
+          <button class="prange-btn" data-range="6m" onclick="setProgressRange('6m')">6M</button>
+          <button class="prange-btn" data-range="1y" onclick="setProgressRange('1y')">1Y</button>
+          <button class="prange-btn" data-range="all" onclick="setProgressRange('all')">All</button>
+        </div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px" id="vol-chart-label">Weekly Volume (lbs lifted)</div>
         <canvas id="vol-canvas" style="width:100%;height:160px;margin-bottom:6px"></canvas>
         <div id="vol-note" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:18px"></div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Workouts per Week</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px" id="count-chart-label">Days Worked Out per Week</div>
         <canvas id="count-canvas" style="width:100%;height:160px"></canvas>
         <div id="count-note" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px"></div>
       </div>
@@ -598,8 +608,9 @@
   <div class="card">
     <div class="card-header"><h2 style="margin:0">Workout Log <span id="workout-streak"></span></h2>
       <div style="display:flex;gap:8px;align-items:center">
-        <select id="fit-filter" onchange="renderWorkouts()" style="width:auto;padding:6px 10px;font-size:16px">
+        <select id="fit-filter" onchange="window._workoutShowCount=5; renderWorkouts()" style="width:auto;padding:6px 10px;font-size:16px">
           <option value="all">All Time</option>
+          <option value="today">Today</option>
           <option value="week">This Week</option>
           <option value="month">This Month</option>
         </select>
@@ -1574,7 +1585,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.7.1</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.8.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1936,6 +1947,7 @@ function filterItems(items, range, dateKey='date') {
   const now = new Date();
   return items.filter(i => {
     const d = new Date(i[dateKey]);
+    if(range==='today') { return i[dateKey]===today(); }
     if(range==='week') { const s=new Date(now); s.setDate(s.getDate()-7); return d>=s; }
     if(range==='month') { return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); }
     return true;
@@ -1959,21 +1971,25 @@ function renderWorkouts() {
   if(weekItems.length) {
     statsHtml = `<div class="metric-row" style="margin-bottom:14px">
       <div class="metric-card"><div class="metric-label">This Week</div><div class="metric-value" style="font-size:20px">${weekItems.length}</div><div class="metric-sub">workouts</div></div>
-      <div class="metric-card"><div class="metric-label">Volume</div><div class="metric-value" style="font-size:20px">${weekVolume>=1000?(weekVolume/1000).toFixed(1)+'k':weekVolume}</div><div class="metric-sub">lbs lifted</div></div>
-      <div class="metric-card"><div class="metric-label">Burned</div><div class="metric-value" style="font-size:20px">~${weekCals>=1000?(weekCals/1000).toFixed(1)+'k':weekCals}</div><div class="metric-sub">est. cal</div></div>
+      <div class="metric-card"><div class="metric-label">Volume</div><div class="metric-value" style="font-size:20px">${weekVolume.toLocaleString()}</div><div class="metric-sub">lbs lifted</div></div>
+      <div class="metric-card"><div class="metric-label">Burned</div><div class="metric-value" style="font-size:20px">~${weekCals.toLocaleString()}</div><div class="metric-sub">est. cal</div></div>
     </div>`;
   }
 
   const catColors = {Strength:'green',Cardio:'orange',Flexibility:'blue',HIIT:'red',Sports:'purple',Other:'blue'};
-  el.innerHTML = statsHtml + items.map(w => {
+  const shown = (range==='all'||range==='week'||range==='month') ? (window._workoutShowCount||5) : items.length;
+  const visible = items.slice(0, shown);
+  const itemsHtml = visible.map(w => {
     const c = workoutCalories(w);
     const vol = workoutVolume(w);
+    const stats = [w.sets&&w.sets+'sets', w.reps&&w.reps+'reps', w.weight&&w.weight+'lbs', w.dur&&w.dur+'min'].filter(Boolean).join(' · ');
+    const metaLine = [stats, fmt(w.date)].filter(Boolean).join(' · ');
     return `
     <div class="list-item">
       <div class="li-icon" style="background:var(--bg3)">🏋️</div>
       <div class="li-body">
         <div class="li-title">${w.name} <span class="tag tag-${catColors[w.cat]||'blue'}">${w.cat}</span></div>
-        <div class="li-meta">${[w.sets&&w.sets+'sets', w.reps&&w.reps+'reps', w.weight&&w.weight+'lbs', w.dur&&w.dur+'min'].filter(Boolean).join(' · ')} · ${fmt(w.date)}</div>
+        <div class="li-meta">${metaLine}</div>
         <div class="li-meta" style="margin-top:2px;color:var(--accent3)">${c.real?'⌚ ':'~'}${c.cal} cal${vol?' · '+vol.toLocaleString()+' lbs volume':''}</div>
         ${w.tips?`<div class="li-meta" style="margin-top:2px;color:var(--muted)">💡 ${w.tips}</div>`:''}
         ${w.notes?`<div class="li-meta" style="margin-top:2px;color:var(--text)">📝 ${w.notes}</div>`:''}
@@ -1981,6 +1997,24 @@ function renderWorkouts() {
       <div class="li-actions" style="display:flex;gap:4px"><button class="btn btn-ghost btn-sm" onclick="openEditWorkout('${w.id}')">✎</button><button class="btn btn-danger btn-sm" onclick="deleteWorkout('${w.id}')">✕</button></div>
     </div>`;
   }).join('');
+  let moreHtml = '';
+  const remaining = items.length - visible.length;
+  if(remaining > 0) {
+    moreHtml = `<div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-ghost btn-sm" style="flex:1" onclick="showMoreWorkouts(5)">Show 5 more (${remaining} left)</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1" onclick="showMoreWorkouts('all')">Show all</button>
+    </div>`;
+  } else if(shown > 5 && items.length > 5) {
+    moreHtml = `<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" style="width:100%" onclick="showMoreWorkouts('reset')">Collapse list</button></div>`;
+  }
+  el.innerHTML = statsHtml + itemsHtml + moreHtml;
+}
+
+function showMoreWorkouts(n) {
+  if(n==='all') window._workoutShowCount = 99999;
+  else if(n==='reset') window._workoutShowCount = 5;
+  else window._workoutShowCount = (window._workoutShowCount||5) + n;
+  renderWorkouts();
 }
 
 // ===== BUDGET =====
@@ -3275,34 +3309,70 @@ function drawBarChart(canvasId, labels, values, noteId, unit, color) {
     ctx.fillText(labels[i], bx+bw/2, cssH-8);
   });
 }
+let _progressRange = '8w';
+function setProgressRange(r) {
+  _progressRange = r;
+  document.querySelectorAll('.prange-btn').forEach(b => b.classList.toggle('active', b.dataset.range===r));
+  renderProgressCharts();
+}
+
 function renderProgressCharts() {
   const empty = document.getElementById('progress-empty');
   const charts = document.getElementById('progress-charts');
   if(!charts) return;
   const strength = DB.workouts.filter(w => w.date);
   if(strength.length < 1) { empty.style.display='block'; charts.style.display='none'; return; }
-  // bucket by week, last 8 weeks
-  const byWeek = {};
-  strength.forEach(w => {
-    const k = weekKey(w.date);
-    if(!byWeek[k]) byWeek[k] = { vol:0, count:0 };
-    byWeek[k].vol += exVolume(w);
-    byWeek[k].count += 1;
-  });
-  const weeks = Object.keys(byWeek).sort().slice(-8);
-  if(weeks.length < 1) { empty.style.display='block'; charts.style.display='none'; return; }
+
+  const r = _progressRange;
+  const monthly = (r==='6m'||r==='1y'||r==='all');
+  // cutoff date
+  const now = new Date();
+  let cutoff = null;
+  if(r==='2w') { cutoff=new Date(now); cutoff.setDate(cutoff.getDate()-14); }
+  else if(r==='4w') { cutoff=new Date(now); cutoff.setDate(cutoff.getDate()-28); }
+  else if(r==='8w') { cutoff=new Date(now); cutoff.setDate(cutoff.getDate()-56); }
+  else if(r==='6m') { cutoff=new Date(now); cutoff.setMonth(cutoff.getMonth()-6); }
+  else if(r==='1y') { cutoff=new Date(now); cutoff.setFullYear(cutoff.getFullYear()-1); }
+  // 'all' = no cutoff
+  const inRange = strength.filter(w => !cutoff || new Date(w.date+'T00:00:00') >= cutoff);
+  if(inRange.length < 1) { empty.style.display='block'; charts.style.display='none'; return; }
   empty.style.display='none'; charts.style.display='block';
-  const labels = weeks.map(k => { const d = new Date(k+'T00:00:00'); return (d.getMonth()+1)+'/'+d.getDate(); });
-  const vols = weeks.map(k => Math.round(byWeek[k].vol));
-  const counts = weeks.map(k => byWeek[k].count);
+
+  // bucket by week or month
+  const buckets = {};
+  inRange.forEach(w => {
+    const k = monthly ? w.date.slice(0,7) : weekKey(w.date); // YYYY-MM or week-start
+    if(!buckets[k]) buckets[k] = { vol:0, days:new Set() };
+    buckets[k].vol += exVolume(w);
+    buckets[k].days.add(w.date);
+  });
+  let keys = Object.keys(buckets).sort();
+  // cap bars so phone stays readable
+  const maxBars = monthly ? 12 : 12;
+  keys = keys.slice(-maxBars);
+
+  const labels = keys.map(k => {
+    if(monthly) { const d=new Date(k+'-01T00:00:00'); return d.toLocaleDateString('en-US',{month:'short'}); }
+    const d = new Date(k+'T00:00:00'); return (d.getMonth()+1)+'/'+d.getDate();
+  });
+  const vols = keys.map(k => Math.round(buckets[k].vol));
+  const counts = keys.map(k => buckets[k].days.size);
   drawBarChart('vol-canvas', labels, vols, null, 'lbs', '#00e5a0');
   drawBarChart('count-canvas', labels, counts, null, '', '#7c9eff');
-  // notes
+
+  // labels reflect bucketing
+  const volLabel = document.getElementById('vol-chart-label');
+  const countLabel = document.getElementById('count-chart-label');
+  if(volLabel) volLabel.textContent = (monthly?'Monthly':'Weekly') + ' Volume (lbs lifted)';
+  if(countLabel) countLabel.textContent = 'Days Worked Out per ' + (monthly?'Month':'Week');
+
   const volNote = document.getElementById('vol-note');
   const countNote = document.getElementById('count-note');
   const totalVol = vols.reduce((a,b)=>a+b,0);
-  if(volNote) volNote.textContent = `${weeks.length} week${weeks.length>1?'s':''} · ${totalVol>=1000?(totalVol/1000).toFixed(1)+'k':totalVol} lbs total`;
-  if(countNote) countNote.textContent = `${counts.reduce((a,b)=>a+b,0)} workouts total · avg ${(counts.reduce((a,b)=>a+b,0)/weeks.length).toFixed(1)}/week`;
+  const totalDays = counts.reduce((a,b)=>a+b,0);
+  const unit = monthly?'month':'week';
+  if(volNote) volNote.textContent = `${keys.length} ${unit}${keys.length>1?'s':''} · ${totalVol.toLocaleString()} lbs total`;
+  if(countNote) countNote.textContent = `${totalDays} days total · avg ${(totalDays/keys.length).toFixed(1)} days/${unit}`;
 }
 
 // ===== MEAL TRACKER =====
@@ -3714,7 +3784,7 @@ const AI_PROVIDERS = {
     label: 'Google Gemini',
     keyPrefix: 'AIza',
     help: 'Get a free key at aistudio.google.com → Get API Key',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.5-flash',
   },
   groq: {
     label: 'Groq',
@@ -4778,14 +4848,20 @@ Return up to 5 stretches or mobility drills. Respond ONLY with valid JSON, no ma
     const match = clean.match(/\[[\s\S]*\]/);
     let list = JSON.parse(match ? match[0] : clean);
     if(!Array.isArray(list) || !list.length) { result.innerHTML='<div style="font-family:var(--mono);font-size:11px;color:var(--muted)">No results — try different wording</div>'; return; }
-    result.innerHTML = `<div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:6px">Found ${list.length} — tap + to add to your library</div>` +
+    result.innerHTML = `<div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:6px">Found ${list.length} — ▶ preview or tap + to add</div>` +
       list.map((m,i)=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg2);border:1px solid var(--accent);border-radius:8px;margin-bottom:6px">
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:700;color:var(--accent)">${m.name}</div>
-          <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">${m.area||''}${m.dur?' · '+m.dur:''}</div>
+      <div style="padding:8px 10px;background:var(--bg2);border:1px solid var(--accent);border-radius:8px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:var(--accent)">${m.name}</div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">${m.area||''}${m.dur?' · '+m.dur:''}</div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm" onclick="showMobilityDemo('${m.name.replace(/'/g,"")} stretch mobility','mob-ai-demo-${i}')">▶</button>
+            <button class="btn btn-primary btn-sm" onclick='addMobilityFromAI(${JSON.stringify(m).replace(/'/g,"&#39;")})'>+ Add</button>
+          </div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick='addMobilityFromAI(${JSON.stringify(m).replace(/'/g,"&#39;")})'>+ Add</button>
+        <div id="mob-ai-demo-${i}"></div>
       </div>`).join('');
   } catch(e) {
     toast('AI error: ' + e.message);
