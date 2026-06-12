@@ -1572,7 +1572,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.5.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.5.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -3638,7 +3638,7 @@ function renderDashboard() {
       <h2 style="margin-bottom:10px">This Week</h2>
       <div style="display:flex;flex-wrap:wrap;gap:12px">
         ${stat(weekWorkouts.length, 'workouts')}
-        ${stat(weekVol>=1000?(weekVol/1000).toFixed(1)+'k':Math.round(weekVol), 'lbs volume')}
+        ${stat(Math.round(weekVol).toLocaleString(), 'lbs volume')}
         ${stat(avgCal||'—', 'avg cal/day')}
         ${stat(fmtMoney(weekSpent), 'spent')}
         ${medPct!==null?stat(medPct+'%','meds taken'):''}
