@@ -1,4 +1,4 @@
-const CACHE_NAME = 'healthhub-v42';
+const CACHE_NAME = 'healthhub-v43';
 const ASSETS = [
   './',
   './index.html',
