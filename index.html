@@ -543,8 +543,9 @@
       <div><label>⌚ Calories (from watch)</label><input id="ex-cals" type="number" placeholder="optional — leave blank to estimate" min="0"></div>
       <div><label>Tips (form cues)</label><input id="ex-tips" placeholder="auto-filled by AI"></div>
     </div>
-    <div class="input-row">
+    <div class="input-row ir-2">
       <div><label>Notes (your own)</label><input id="ex-notes" placeholder="e.g. grip width, left shoulder tight, go heavier next time"></div>
+      <div><label>Date</label><input id="ex-date" type="date"></div>
     </div>
     <button class="btn btn-primary" onclick="addWorkout()">+ Log Exercise</button>
     </div>
@@ -561,8 +562,8 @@
     </div>
     <div class="collapse-body">
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px">Finished on a treadmill/stair climber? Snap the summary screen to auto-read it, or just type the numbers. Both log a cardio workout.</p>
-    <button class="btn btn-ghost" onclick="openCardioPhoto()" style="width:100%;margin-bottom:10px">📷 Snap Machine Screen (AI reads it)</button>
-    <input type="file" id="cardio-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleCardioPhoto(event)">
+    <button class="btn btn-ghost" onclick="openCardioPhoto()" style="width:100%;margin-bottom:10px">📷 Snap or Upload Machine Screen</button>
+    <input type="file" id="cardio-photo-input" accept="image/*" style="display:none" onchange="handleCardioPhoto(event)">
     <div class="ai-loading" id="cardio-photo-loading"><div class="ai-spinner"></div>Reading the screen...</div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 8px">Or enter manually</div>
     <div class="input-row"><div><label>Machine</label>
@@ -571,6 +572,7 @@
       </select>
     </div></div>
     <div id="cardio-fields"></div>
+    <div class="input-row"><div><label>Date</label><input id="cardio-date" type="date"></div></div>
     <button class="btn btn-primary" onclick="logCardioManual()" style="width:100%;margin-top:4px">+ Log Cardio</button>
     <div id="cardio-photo-result"></div>
     </div>
@@ -617,7 +619,7 @@
     </div>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px">See a machine you don't recognize? Snap a photo and AI tells you what it is, what it works, and how to use it. (Requires Gemini key)</p>
     <button class="btn btn-primary" onclick="openMachineId()" style="width:100%">📷 Take / Upload Photo</button>
-    <input type="file" id="machine-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleMachinePhoto(event)">
+    <input type="file" id="machine-photo-input" accept="image/*" style="display:none" onchange="handleMachinePhoto(event)">
     <div class="ai-loading" id="machine-id-loading"><div class="ai-spinner"></div>Identifying machine...</div>
     <div id="machine-id-result"></div>
   </div>
@@ -1478,8 +1480,8 @@
       </div>
       <textarea id="meal-input" placeholder="e.g. 2 scrambled eggs, 2 toast with butter, black coffee" style="min-height:70px;margin-bottom:8px"></textarea>
       <button class="btn btn-primary" style="width:100%" onclick="estimateMeal()">🤖 Estimate & Log</button>
-      <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="openMealPhoto()">📷 Snap a Meal Photo</button>
-      <input type="file" id="meal-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleMealPhoto(event)">
+      <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="openMealPhoto()">📷 Snap or Upload a Meal Photo</button>
+      <input type="file" id="meal-photo-input" accept="image/*" style="display:none" onchange="handleMealPhoto(event)">
       <p style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:6px;text-align:center">Photo goes to Gemini for the estimate, then it's discarded — never saved.</p>
       <div class="ai-loading" id="meal-loading"><div class="ai-spinner"></div>Estimating calories...</div>
       <div id="meal-result"></div>
@@ -1572,7 +1574,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.6.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.7.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1734,14 +1736,14 @@ function addWorkout() {
     cals: document.getElementById('ex-cals').value || '',
     tips: document.getElementById('ex-tips').value.trim(),
     notes: document.getElementById('ex-notes').value.trim(),
-    date: today()
+    date: document.getElementById('ex-date').value || today()
   };
   DB.workouts.unshift(w);
   save();
   const realCal = parseInt(w.cals)||0;
   const cals = realCal || estimateCalories(w);
   toast(`Workout logged ✓ ${realCal?'':'~'}${cals} cal`);
-  ['ex-name','ex-sets','ex-reps','ex-weight','ex-dur','ex-cals','ex-tips','ex-notes'].forEach(id => document.getElementById(id).value='');
+  ['ex-name','ex-sets','ex-reps','ex-weight','ex-dur','ex-cals','ex-tips','ex-notes','ex-date'].forEach(id => document.getElementById(id).value='');
   renderWorkouts();
 }
 
@@ -1834,12 +1836,13 @@ function logCardioManual() {
   DB.workouts.unshift({
     id: uid(), name: machine, cat: 'Cardio',
     sets:'', reps:'', weight:'', dur: dur||'', cals: cals||'',
-    tips:'', notes: noteParts.join(' · '), date: today()
+    tips:'', notes: noteParts.join(' · '), date: document.getElementById('cardio-date').value || today()
   });
   save();
   const realCal = parseInt(cals)||0;
   toast(`${machine} logged ✓ ${realCal?'⌚'+realCal:'~'+estimateCalories({cat:'Cardio',dur})} cal`);
   fields.forEach(f => { const el=document.getElementById('cardio-'+f.id); if(el) el.value=''; });
+  const cd=document.getElementById('cardio-date'); if(cd) cd.value='';
   document.getElementById('cardio-photo-result').innerHTML='';
   renderWorkouts();
 }
