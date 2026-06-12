@@ -1585,7 +1585,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.8.1</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.8.2</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1880,7 +1880,7 @@ function handleCardioPhoto(event) {
         const prompt = `This is a photo of a cardio machine's summary/workout screen. Read the numbers and respond ONLY with valid JSON, no markdown:
 { "machine": "Treadmill|Stair Climber|Bike|Elliptical|Rower|Other Cardio", "duration_min": number_or_null, "distance_mi": number_or_null, "speed_mph": number_or_null, "incline_pct": number_or_null, "level": number_or_null, "floors": number_or_null, "calories": number_or_null, "avg_hr": number_or_null }
 If a value isn't visible use null. Convert any MM:SS time to total minutes (rounded).`;
-        const text = await callAIWithImage(prompt, base64, 400);
+        const text = await callAIWithImage(prompt, base64, 800);
         const clean = text.replace(/```json|```/g,'').trim();
         const m = clean.match(/\{[\s\S]*\}/);
         const data = JSON.parse(m ? m[0] : clean);
@@ -3420,7 +3420,7 @@ async function callMealAI(prompt, maxTokens) {
   if(prov === 'gemini') {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${key}`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{maxOutputTokens:maxTokens} })
+      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{ maxOutputTokens: Math.max(maxTokens, 1200), thinkingConfig:{ thinkingBudget: 0 } } })
     });
     const d = await res.json();
     if(!res.ok) throw new Error(d.error?.message||'API error');
@@ -4352,9 +4352,11 @@ async function callOneProvider(prov, key, prompt, imageBase64, maxTokens) {
   if(prov === 'gemini') {
     const parts = [{text:prompt}];
     if(imageBase64) parts.push({inline_data:{mime_type:'image/jpeg',data:imageBase64}});
+    // 3.x flash are thinking models — thinking eats the output budget and truncates JSON.
+    // Disable thinking for these structured tasks and give generous headroom.
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${key}`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{parts}], generationConfig:{maxOutputTokens:maxTokens} })
+      body: JSON.stringify({ contents:[{parts}], generationConfig:{ maxOutputTokens: Math.max(maxTokens, 1200), thinkingConfig:{ thinkingBudget: 0 } } })
     });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error?.message || 'API error');
