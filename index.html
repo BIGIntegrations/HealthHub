@@ -36,6 +36,8 @@
     --accent2: #ff6b35;
     --accent3: #5b8cff;
     --accent4: #c77dff;
+    --nav-rgb: 13,15,18;
+    --accent-ink: #06231a;
     --text: #e8eaf0;
     --muted: #6b7280;
     --danger: #ff4757;
@@ -47,11 +49,11 @@
   body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
 
   /* NAV */
-  .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(13,15,18,0.92); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); height: calc(58px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); display: flex; align-items: center; }
+  .nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: rgba(var(--nav-rgb),0.92); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); height: calc(58px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); display: flex; align-items: center; }
   .nav-brand { font-size: 17px; font-weight: 800; letter-spacing: -0.5px; color: var(--accent); white-space: nowrap; padding: 0 14px 0 20px; flex-shrink: 0; }
   .nav-brand span { color: var(--text); }
   .nav-scroll-wrap { position: relative; flex: 1; min-width: 0; }
-  .nav-scroll-wrap::after { content: ''; position: absolute; top: 0; right: 0; width: 48px; height: 100%; background: linear-gradient(to right, transparent, rgba(13,15,18,0.95)); pointer-events: none; }
+  .nav-scroll-wrap::after { content: ''; position: absolute; top: 0; right: 0; width: 48px; height: 100%; background: linear-gradient(to right, transparent, rgba(var(--nav-rgb),0.95)); pointer-events: none; }
   .nav-tabs { display: flex; align-items: center; gap: 4px; overflow-x: auto; padding: 0 12px 0 0; scrollbar-width: none; -ms-overflow-style: none; }
   .nav-tabs::-webkit-scrollbar { display: none; }
   .nav-btn { background: none; border: none; color: var(--muted); font-family: var(--sans); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; transition: all .2s; letter-spacing: .4px; text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
@@ -85,7 +87,7 @@
   select option { background: var(--bg3); }
   textarea { resize: vertical; min-height: 70px; }
   .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: 8px; border: none; font-family: var(--sans); font-size: 13px; font-weight: 700; cursor: pointer; transition: all .2s; letter-spacing: .2px; }
-  .btn-primary { background: var(--accent); color: #0d0f12; }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); }
   .btn-primary:hover { background: #00c987; }
   .btn-ghost { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
   .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
@@ -1518,6 +1520,18 @@
   <h1>Settings</h1>
   <p class="sub">Configure AI features and app preferences</p>
   <div class="card">
+    <h2>🎨 Appearance</h2>
+    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:14px">Pick a theme and your accent color. Saved on this device.</p>
+    <label>Theme</label>
+    <div id="theme-picker" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+    <label>Accent color</label>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+      <input type="color" id="accent-picker" onchange="setAccent(this.value)" style="width:54px;height:40px;padding:0;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer">
+      <span id="accent-hex" style="font-family:var(--mono);font-size:13px;color:var(--text)"></span>
+      <button class="btn btn-ghost btn-sm" onclick="resetAccent()" style="margin-left:auto">Reset</button>
+    </div>
+  </div>
+  <div class="card">
     <h2>🤖 AI Provider</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:14px">Powers the AI Workout Assistant & breakdowns. Pick a provider, paste its key. Stored locally only. Gemini & Groq have generous free tiers.</p>
     <div class="input-row"><div>
@@ -1585,7 +1599,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.9.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.10.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1633,11 +1647,59 @@ function load() {
   if (d) { try { Object.assign(DB, JSON.parse(d)); } catch(e){} }
 }
 
+// ===== THEMING =====
+const THEMES = {
+  dark:     { label:'Dark (default)', bg:'#0d0f12', bg2:'#13161b', bg3:'#1a1e26', border:'#242830', text:'#e8eaf0', muted:'#6b7280', navrgb:'13,15,18' },
+  midnight: { label:'Midnight',       bg:'#05070d', bg2:'#0b0f1a', bg3:'#121829', border:'#1c2438', text:'#e6ebf5', muted:'#6878a0', navrgb:'5,7,13' },
+  slate:    { label:'Slate',          bg:'#161a1f', bg2:'#1d222a', bg3:'#262d38', border:'#333b48', text:'#eceef2', muted:'#7a8494', navrgb:'22,26,31' },
+  light:    { label:'Light',          bg:'#f4f6fa', bg2:'#ffffff', bg3:'#eceff5', border:'#d7dce5', text:'#1a1d24', muted:'#6b7280', navrgb:'244,246,250' }
+};
+const DEFAULT_ACCENT = '#00e5a0';
+
+function getTheme() { return localStorage.getItem('healthhub_theme') || 'dark'; }
+function getAccent() { return localStorage.getItem('healthhub_accent') || DEFAULT_ACCENT; }
+
+function applyTheme() {
+  const t = THEMES[getTheme()] || THEMES.dark;
+  const accent = getAccent();
+  const r = document.documentElement.style;
+  r.setProperty('--bg', t.bg);
+  r.setProperty('--bg2', t.bg2);
+  r.setProperty('--bg3', t.bg3);
+  r.setProperty('--border', t.border);
+  r.setProperty('--text', t.text);
+  r.setProperty('--muted', t.muted);
+  r.setProperty('--accent', accent);
+  r.setProperty('--nav-rgb', t.navrgb);
+  // accent-on-button text: dark text on bright accents, white on dark accents
+  r.setProperty('--accent-ink', isLightColor(accent) ? '#06231a' : '#ffffff');
+  document.documentElement.setAttribute('data-theme', getTheme());
+}
+
+function isLightColor(hex) {
+  const h = hex.replace('#',''); if(h.length<6) return false;
+  const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+  // perceived luminance
+  return (0.299*r + 0.587*g + 0.114*b) > 140;
+}
+
+function setTheme(name) { localStorage.setItem('healthhub_theme', name); applyTheme(); renderSettings(); }
+function setAccent(hex) { localStorage.setItem('healthhub_accent', hex); applyTheme(); const ah=document.getElementById('accent-hex'); if(ah) ah.textContent=hex.toUpperCase(); }
+function resetAccent() { localStorage.removeItem('healthhub_accent'); applyTheme(); renderSettings(); }
+
+
 // ===== UTILS =====
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function localDate(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function today() { return localDate(); }
-function fmt(d) { return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
+function fmt(d) {
+  // Parse YYYY-MM-DD as LOCAL date (new Date('2026-06-12') parses as UTC and can show the prior day)
+  if(typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    const [y,m,day] = d.split('-').map(Number);
+    return new Date(y, m-1, day).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+  return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
 function fmtMoney(n) { return '$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -1920,10 +1982,10 @@ function openEditWorkout(id) {
   document.getElementById('edit-w-cals').value = w.cals || '';
   document.getElementById('edit-w-tips').value = w.tips || '';
   document.getElementById('edit-w-notes').value = w.notes || '';
-  document.getElementById('edit-workout-modal').classList.add('show');
+  document.getElementById('edit-workout-modal').classList.add('open');
 }
 function closeEditWorkout() {
-  document.getElementById('edit-workout-modal').classList.remove('show');
+  document.getElementById('edit-workout-modal').classList.remove('open');
 }
 function saveEditWorkout() {
   const id = document.getElementById('edit-w-id').value;
@@ -1949,8 +2011,9 @@ function filterItems(items, range, dateKey='date') {
   if(range==='all') return items;
   const now = new Date();
   return items.filter(i => {
-    const d = new Date(i[dateKey]);
-    if(range==='today') { return i[dateKey]===today(); }
+    const ds = i[dateKey];
+    const d = (typeof ds==='string' && /^\d{4}-\d{2}-\d{2}$/.test(ds)) ? new Date(ds+'T00:00:00') : new Date(ds);
+    if(range==='today') { return ds===today(); }
     if(range==='week') { const s=new Date(now); s.setDate(s.getDate()-7); return d>=s; }
     if(range==='month') { return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); }
     return true;
@@ -4390,6 +4453,23 @@ async function testAPIKey() {
 }
 
 function renderSettings() {
+  // Appearance: theme buttons + accent
+  const tp = document.getElementById('theme-picker');
+  if(tp) {
+    const cur = getTheme();
+    tp.innerHTML = Object.keys(THEMES).map(k => {
+      const t = THEMES[k];
+      const active = k===cur;
+      return `<button onclick="setTheme('${k}')" style="flex:0 0 auto;padding:8px 14px;border-radius:10px;cursor:pointer;font-family:var(--mono);font-size:12px;border:2px solid ${active?'var(--accent)':'var(--border)'};background:${t.bg2};color:${t.text};display:flex;align-items:center;gap:8px">
+        <span style="width:14px;height:14px;border-radius:50%;background:${t.bg};border:1px solid ${t.border};display:inline-block"></span>${t.label}${active?' ✓':''}
+      </button>`;
+    }).join('');
+  }
+  const ap = document.getElementById('accent-picker');
+  if(ap) ap.value = getAccent();
+  const ah = document.getElementById('accent-hex');
+  if(ah) ah.textContent = getAccent().toUpperCase();
+
   const prov = getProvider();
   const sel = document.getElementById('ai-provider');
   if(sel) sel.value = prov;
@@ -5903,6 +5983,7 @@ function analyzeQRWithAI() {
 
 // ===== INIT =====
 load();
+applyTheme();
 document.getElementById('tx-date').value = today();
 // Set default dates on debt forms
 ['adv-repay-date','arr-first-date','bnpl-start-date','gray-date'].forEach(id => {
