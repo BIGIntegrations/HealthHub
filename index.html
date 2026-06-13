@@ -1585,7 +1585,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.8.2</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.9.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1777,8 +1777,10 @@ const CARDIO_FIELDS = {
   'Stair Climber': [
     {id:'dur',label:'Duration (min)',ph:'e.g. 15'},
     {id:'level',label:'Level',ph:'opt'},
-    {id:'floors',label:'Floors / Steps',ph:'opt'},
+    {id:'floors',label:'Floors Climbed',ph:'opt'},
+    {id:'steps',label:'Steps',ph:'opt'},
     {id:'cals',label:'⌚ Calories',ph:'opt'},
+    {id:'watts',label:'Watts',ph:'opt'},
     {id:'hr',label:'Avg HR',ph:'opt'}
   ],
   'Bike': [
@@ -1839,7 +1841,7 @@ function logCardioManual() {
     if(f.id==='dur'||f.id==='cals') return;
     const v = getCardioVal(f.id);
     if(v) {
-      const unit = f.id==='dist'?' mi':f.id==='speed'?' mph':f.id==='incline'?'% incline':f.id==='meters'?'m':f.id==='split'?'/500m':f.id==='floors'?' floors':f.id==='level'?'':'';
+      const unit = f.id==='dist'?' mi':f.id==='speed'?' mph':f.id==='incline'?'% incline':f.id==='meters'?'m':f.id==='split'?'/500m':f.id==='floors'?' floors':f.id==='steps'?' steps':f.id==='watts'?'W':f.id==='level'?'':'';
       const lbl = f.id==='hr'?'avg HR ':f.id==='level'?'level ':'';
       noteParts.push(lbl + v + unit);
     }
@@ -1878,8 +1880,8 @@ function handleCardioPhoto(event) {
       const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
       try {
         const prompt = `This is a photo of a cardio machine's summary/workout screen. Read the numbers and respond ONLY with valid JSON, no markdown:
-{ "machine": "Treadmill|Stair Climber|Bike|Elliptical|Rower|Other Cardio", "duration_min": number_or_null, "distance_mi": number_or_null, "speed_mph": number_or_null, "incline_pct": number_or_null, "level": number_or_null, "floors": number_or_null, "calories": number_or_null, "avg_hr": number_or_null }
-If a value isn't visible use null. Convert any MM:SS time to total minutes (rounded).`;
+{ "machine": "Treadmill|Stair Climber|Bike|Elliptical|Rower|Other Cardio", "duration_min": number_or_null, "distance_mi": number_or_null, "speed_mph": number_or_null, "incline_pct": number_or_null, "level": number_or_null, "floors": number_or_null, "steps": number_or_null, "watts": number_or_null, "calories": number_or_null, "avg_hr": number_or_null }
+If a value isn't visible use null. Convert any MM:SS time to total minutes (rounded). For a stair machine: "floors" is floors/levels climbed, "steps" is total steps, "watts" is power output, "level" is the resistance/speed level.`;
         const text = await callAIWithImage(prompt, base64, 800);
         const clean = text.replace(/```json|```/g,'').trim();
         const m = clean.match(/\{[\s\S]*\}/);
@@ -1889,6 +1891,7 @@ If a value isn't visible use null. Convert any MM:SS time to total minutes (roun
         const setIf = (id,val)=>{ const el=document.getElementById('cardio-'+id); if(el&&val!=null) el.value=val; };
         setIf('dur',data.duration_min); setIf('dist',data.distance_mi); setIf('speed',data.speed_mph);
         setIf('incline',data.incline_pct); setIf('level',data.level); setIf('floors',data.floors);
+        setIf('steps',data.steps); setIf('watts',data.watts);
         setIf('cals',data.calories); setIf('hr',data.avg_hr);
         result.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:10px">✓ Read the screen — check the values, fix anything off, then tap "Log Cardio"</p>`;
       } catch(err) {
@@ -5912,10 +5915,40 @@ buildWaterTracker();
 <!-- Service Worker Registration -->
 <script>
 if('serviceWorker' in navigator) {
+  let _reloadedForUpdate = false;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/HealthHub/sw.js', { scope: '/HealthHub/' })
-      .then(reg => console.log('SW registered:', reg.scope))
+      .then(reg => {
+        console.log('SW registered:', reg.scope);
+        // Check for a new version every time the app opens
+        reg.update();
+        // When a new SW is found and finishes installing, activate it right away
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          if(!nw) return;
+          nw.addEventListener('statechange', () => {
+            if(nw.state === 'installed' && navigator.serviceWorker.controller) {
+              // A newer version is ready — tell it to take over
+              nw.postMessage('skipWaiting');
+            }
+          });
+        });
+      })
       .catch(err => console.log('SW failed:', err));
+
+    // When the controlling SW changes (new version activated), reload once to load fresh code
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if(_reloadedForUpdate) return;
+      _reloadedForUpdate = true;
+      window.location.reload();
+    });
+  });
+
+  // Also re-check for updates whenever you return to the app (reopen from background)
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible' && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.getRegistration().then(reg => { if(reg) reg.update(); });
+    }
   });
 }
 </script>
