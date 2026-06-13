@@ -543,6 +543,12 @@
       <div id="f-weight"><label>Weight (lbs)</label><input id="ex-weight" type="number" placeholder="135" min="0"></div>
       <div id="f-dur"><label>Duration (min)</label><input id="ex-dur" type="number" placeholder="45" min="1"></div>
     </div>
+    <div id="f-setlist" style="display:none">
+      <label>Sets <span style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:none">— each set its own reps & weight</span></label>
+      <div id="setlist-rows"></div>
+      <button type="button" class="btn btn-ghost btn-sm" style="width:100%;margin-top:4px" onclick="addSetRow()">+ Add Set</button>
+      <div id="f-dur2" style="margin-top:10px;display:none"><label>Duration (min)</label><input id="ex-dur2" type="number" placeholder="45" min="1"></div>
+    </div>
     <div class="input-row ir-2">
       <div><label>⌚ Calories (from watch)</label><input id="ex-cals" type="number" placeholder="optional — leave blank to estimate" min="0"></div>
       <div><label>Tips (form cues)</label><input id="ex-tips" placeholder="auto-filled by AI"></div>
@@ -692,10 +698,9 @@
         <h2 style="margin:0">🧘 Mobility & Warmups</h2>
         <span class="tag tag-purple">Demos</span>
       </div>
-      <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px">Stretches, warmups & mobility flows. Tap any to see a demo. Search the library or ask AI for trendy ones.</p>
-      <input class="equip-search" id="mobility-search" placeholder="Search stretches... (e.g. hip, hamstring, shoulder)" oninput="renderMobility()">
+      <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px">Stretches, warmups & mobility flows. Tap any to see a demo. Type to search the library — if it's not there, hit AI.</p>
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <input id="mobility-ai-search" placeholder="Or ask AI: 'Asian squat mobility', 'hip flow'..." style="flex:1" onkeydown="if(event.key==='Enter')aiSearchMobility()">
+        <input class="equip-search" id="mobility-search" placeholder="Search stretches... (e.g. hip, hamstring, shoulder)" style="flex:1;margin-bottom:0" oninput="renderMobility()" onkeydown="if(event.key==='Enter')aiSearchMobility()">
         <button class="btn btn-primary btn-sm" onclick="aiSearchMobility()" style="white-space:nowrap">🤖 AI</button>
       </div>
       <div class="ai-loading" id="mobility-ai-loading"><div class="ai-spinner"></div>Finding stretches...</div>
@@ -897,10 +902,15 @@
       </div>
       <div><label>Date</label><input type="date" id="edit-w-date"></div>
     </div>
-    <div class="input-row ir-3">
+    <div class="input-row ir-3" id="edit-simple-fields">
       <div><label>Sets</label><input type="number" id="edit-w-sets" min="0"></div>
       <div><label>Reps</label><input type="number" id="edit-w-reps" min="0"></div>
       <div><label>Weight</label><input type="number" id="edit-w-weight" min="0"></div>
+    </div>
+    <div id="edit-setlist-box" style="display:none">
+      <label>Sets <span style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:none">— per-set reps & weight</span></label>
+      <div id="edit-setlist-rows"></div>
+      <button type="button" class="btn btn-ghost btn-sm" style="width:100%;margin-top:4px" onclick="addEditSetRow()">+ Add Set</button>
     </div>
     <div class="input-row ir-2">
       <div><label>Duration (min)</label><input type="number" id="edit-w-dur" min="0"></div>
@@ -1599,7 +1609,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.10.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.11.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1762,20 +1772,39 @@ function workoutCalories(w) {
 }
 // Total volume (lbs lifted) for a strength workout = sets × reps × weight
 function workoutVolume(w) {
+  if(Array.isArray(w.setList) && w.setList.length) {
+    return w.setList.reduce((sum,s)=> sum + (parseInt(s.reps)||0)*(parseFloat(s.weight)||0), 0);
+  }
   const s = parseInt(w.sets)||0, r = parseInt(w.reps)||0, wt = parseFloat(w.weight)||0;
   return s * r * wt;
 }
 
 // Show only the fields relevant to the selected category
+// Categories that benefit from per-set logging (reps + weight per set)
+const PERSET_CATS = ['Strength','Other'];
 function updateLogFields() {
   const cat = document.getElementById('ex-cat')?.value || 'Strength';
+  const usePerSet = PERSET_CATS.includes(cat);
+  const simpleRow = document.getElementById('log-fields-row');
+  const setListBox = document.getElementById('f-setlist');
+
+  if(usePerSet) {
+    // hide the simple sets/reps/weight grid, show per-set rows + duration-in-setlist
+    if(simpleRow) simpleRow.style.display = 'none';
+    if(setListBox) setListBox.style.display = 'block';
+    document.getElementById('f-dur2').style.display = 'block';
+    if(!document.getElementById('setlist-rows').children.length) addSetRow(); // start with one
+    return;
+  }
+
+  // non-per-set categories use the original simple fields
+  if(setListBox) setListBox.style.display = 'none';
+  if(simpleRow) simpleRow.style.display = 'flex';
   const show = ({
-    'Strength':    {sets:1, reps:1, weight:1, dur:1},
     'Cardio':      {sets:0, reps:0, weight:0, dur:1},
     'Flexibility': {sets:1, reps:1, weight:0, dur:1},
     'HIIT':        {sets:1, reps:0, weight:0, dur:1},
-    'Sports':      {sets:0, reps:0, weight:0, dur:1},
-    'Other':       {sets:1, reps:1, weight:1, dur:1}
+    'Sports':      {sets:0, reps:0, weight:0, dur:1}
   })[cat] || {sets:1, reps:1, weight:1, dur:1};
   const map = {sets:'f-sets', reps:'f-reps', weight:'f-weight', dur:'f-dur'};
   let visible = 0;
@@ -1786,37 +1815,112 @@ function updateLogFields() {
     if(show[k]) visible++;
     else { const inp = el.querySelector('input'); if(inp) inp.value = ''; }
   });
-  // re-fit the grid to the visible count
   const row = document.getElementById('log-fields-row');
   if(row) row.className = 'input-row' + (visible > 1 ? ' ir-' + Math.min(visible,4) : '');
-  // contextual labels
   const ls = document.getElementById('lbl-sets');
   if(ls) ls.textContent = cat === 'HIIT' ? 'Rounds' : 'Sets';
   const lr = document.getElementById('lbl-reps');
   if(lr) lr.textContent = cat === 'Flexibility' ? 'Reps / Secs' : 'Reps';
 }
 
+// ===== PER-SET ROWS =====
+function addSetRow(reps, weight) {
+  const rows = document.getElementById('setlist-rows');
+  if(!rows) return;
+  // auto-copy the previous set's values if not specified
+  if(reps === undefined && weight === undefined) {
+    const last = rows.querySelector('.set-row:last-child');
+    if(last) {
+      reps = last.querySelector('.set-reps').value;
+      weight = last.querySelector('.set-weight').value;
+    }
+  }
+  const n = rows.children.length + 1;
+  const div = document.createElement('div');
+  div.className = 'set-row';
+  div.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
+  div.innerHTML = `
+    <span style="font-family:var(--mono);font-size:11px;color:var(--muted);width:42px;flex:0 0 auto">SET ${n}</span>
+    <input class="set-reps" type="number" inputmode="numeric" placeholder="reps" min="0" value="${reps??''}" style="flex:1;min-width:0">
+    <input class="set-weight" type="number" inputmode="decimal" placeholder="lbs" min="0" step="0.5" value="${weight??''}" style="flex:1;min-width:0">
+    <button type="button" class="btn btn-danger btn-sm" onclick="removeSetRow(this)" style="flex:0 0 auto">✕</button>`;
+  rows.appendChild(div);
+}
+function removeSetRow(btn) {
+  const rows = document.getElementById('setlist-rows');
+  if(rows.children.length <= 1) { // keep at least one, just clear it
+    const r = rows.querySelector('.set-row');
+    r.querySelector('.set-reps').value = '';
+    r.querySelector('.set-weight').value = '';
+    return;
+  }
+  btn.closest('.set-row').remove();
+  renumberSetRows();
+}
+function renumberSetRows() {
+  document.querySelectorAll('#setlist-rows .set-row').forEach((r,i) => {
+    r.querySelector('span').textContent = 'SET ' + (i+1);
+  });
+}
+function readSetList() {
+  const out = [];
+  document.querySelectorAll('#setlist-rows .set-row').forEach(r => {
+    const reps = r.querySelector('.set-reps').value;
+    const weight = r.querySelector('.set-weight').value;
+    if(reps !== '' || weight !== '') out.push({ reps: reps||'', weight: weight||'' });
+  });
+  return out;
+}
+function clearSetList() {
+  const rows = document.getElementById('setlist-rows');
+  if(rows) { rows.innerHTML = ''; addSetRow(); }
+}
+
+
 function addWorkout() {
   const name = document.getElementById('ex-name').value.trim();
   if(!name) { toast('Enter an exercise name'); return; }
-  const w = {
-    id: uid(), name,
-    cat: document.getElementById('ex-cat').value,
-    sets: document.getElementById('ex-sets').value || '',
-    reps: document.getElementById('ex-reps').value || '',
-    weight: document.getElementById('ex-weight').value || '',
-    dur: document.getElementById('ex-dur').value || '',
-    cals: document.getElementById('ex-cals').value || '',
-    tips: document.getElementById('ex-tips').value.trim(),
-    notes: document.getElementById('ex-notes').value.trim(),
-    date: document.getElementById('ex-date').value || today()
-  };
+  const cat = document.getElementById('ex-cat').value;
+  const usePerSet = PERSET_CATS.includes(cat);
+  let w;
+  if(usePerSet) {
+    const setList = readSetList();
+    if(!setList.length) { toast('Add at least one set'); return; }
+    // derive summary fields for backward-compat + simple displays
+    const reps0 = setList[0].reps || '';
+    const sameWeight = setList.every(s => s.weight === setList[0].weight);
+    w = {
+      id: uid(), name, cat,
+      sets: String(setList.length),
+      reps: reps0,
+      weight: sameWeight ? (setList[0].weight||'') : '',
+      setList, // the per-set detail
+      dur: document.getElementById('ex-dur2').value || '',
+      cals: document.getElementById('ex-cals').value || '',
+      tips: document.getElementById('ex-tips').value.trim(),
+      notes: document.getElementById('ex-notes').value.trim(),
+      date: document.getElementById('ex-date').value || today()
+    };
+  } else {
+    w = {
+      id: uid(), name, cat,
+      sets: document.getElementById('ex-sets').value || '',
+      reps: document.getElementById('ex-reps').value || '',
+      weight: document.getElementById('ex-weight').value || '',
+      dur: document.getElementById('ex-dur').value || '',
+      cals: document.getElementById('ex-cals').value || '',
+      tips: document.getElementById('ex-tips').value.trim(),
+      notes: document.getElementById('ex-notes').value.trim(),
+      date: document.getElementById('ex-date').value || today()
+    };
+  }
   DB.workouts.unshift(w);
   save();
   const realCal = parseInt(w.cals)||0;
   const cals = realCal || estimateCalories(w);
   toast(`Workout logged ✓ ${realCal?'':'~'}${cals} cal`);
-  ['ex-name','ex-sets','ex-reps','ex-weight','ex-dur','ex-cals','ex-tips','ex-notes','ex-date'].forEach(id => document.getElementById(id).value='');
+  ['ex-name','ex-sets','ex-reps','ex-weight','ex-dur','ex-dur2','ex-cals','ex-tips','ex-notes','ex-date'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  clearSetList();
   renderWorkouts();
 }
 
@@ -1975,14 +2079,40 @@ function openEditWorkout(id) {
   document.getElementById('edit-w-name').value = w.name || '';
   document.getElementById('edit-w-cat').value = w.cat || 'Strength';
   document.getElementById('edit-w-date').value = w.date || today();
-  document.getElementById('edit-w-sets').value = w.sets || '';
-  document.getElementById('edit-w-reps').value = w.reps || '';
-  document.getElementById('edit-w-weight').value = w.weight || '';
+  const hasSetList = Array.isArray(w.setList) && w.setList.length;
+  document.getElementById('edit-simple-fields').style.display = hasSetList ? 'none' : 'flex';
+  document.getElementById('edit-setlist-box').style.display = hasSetList ? 'block' : 'none';
+  if(hasSetList) {
+    const rows = document.getElementById('edit-setlist-rows');
+    rows.innerHTML = '';
+    w.setList.forEach(s => addEditSetRow(s.reps, s.weight));
+  } else {
+    document.getElementById('edit-w-sets').value = w.sets || '';
+    document.getElementById('edit-w-reps').value = w.reps || '';
+    document.getElementById('edit-w-weight').value = w.weight || '';
+  }
   document.getElementById('edit-w-dur').value = w.dur || '';
   document.getElementById('edit-w-cals').value = w.cals || '';
   document.getElementById('edit-w-tips').value = w.tips || '';
   document.getElementById('edit-w-notes').value = w.notes || '';
   document.getElementById('edit-workout-modal').classList.add('open');
+}
+function addEditSetRow(reps, weight) {
+  const rows = document.getElementById('edit-setlist-rows');
+  if(!rows) return;
+  if(reps === undefined && weight === undefined) {
+    const last = rows.querySelector('.eset-row:last-child');
+    if(last) { reps = last.querySelector('.set-reps').value; weight = last.querySelector('.set-weight').value; }
+  }
+  const div = document.createElement('div');
+  div.className = 'eset-row';
+  div.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
+  div.innerHTML = `
+    <span style="font-family:var(--mono);font-size:11px;color:var(--muted);width:42px;flex:0 0 auto">SET ${rows.children.length+1}</span>
+    <input class="set-reps" type="number" inputmode="numeric" placeholder="reps" min="0" value="${reps??''}" style="flex:1;min-width:0">
+    <input class="set-weight" type="number" inputmode="decimal" placeholder="lbs" min="0" step="0.5" value="${weight??''}" style="flex:1;min-width:0">
+    <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.eset-row').remove(); [...document.querySelectorAll('#edit-setlist-rows .eset-row')].forEach((r,i)=>r.querySelector('span').textContent='SET '+(i+1))" style="flex:0 0 auto">✕</button>`;
+  rows.appendChild(div);
 }
 function closeEditWorkout() {
   document.getElementById('edit-workout-modal').classList.remove('open');
@@ -1994,9 +2124,23 @@ function saveEditWorkout() {
   w.name = document.getElementById('edit-w-name').value.trim() || w.name;
   w.cat = document.getElementById('edit-w-cat').value;
   w.date = document.getElementById('edit-w-date').value || w.date;
-  w.sets = document.getElementById('edit-w-sets').value || '';
-  w.reps = document.getElementById('edit-w-reps').value || '';
-  w.weight = document.getElementById('edit-w-weight').value || '';
+  if(Array.isArray(w.setList) && w.setList.length) {
+    const newList = [];
+    document.querySelectorAll('#edit-setlist-rows .eset-row').forEach(r => {
+      const reps = r.querySelector('.set-reps').value;
+      const weight = r.querySelector('.set-weight').value;
+      if(reps !== '' || weight !== '') newList.push({ reps: reps||'', weight: weight||'' });
+    });
+    w.setList = newList;
+    w.sets = String(newList.length);
+    w.reps = newList[0]?.reps || '';
+    const same = newList.every(s => s.weight === newList[0]?.weight);
+    w.weight = same ? (newList[0]?.weight||'') : '';
+  } else {
+    w.sets = document.getElementById('edit-w-sets').value || '';
+    w.reps = document.getElementById('edit-w-reps').value || '';
+    w.weight = document.getElementById('edit-w-weight').value || '';
+  }
   w.dur = document.getElementById('edit-w-dur').value || '';
   w.cals = document.getElementById('edit-w-cals').value || '';
   w.tips = document.getElementById('edit-w-tips').value.trim();
@@ -2048,7 +2192,9 @@ function renderWorkouts() {
   const itemsHtml = visible.map(w => {
     const c = workoutCalories(w);
     const vol = workoutVolume(w);
-    const stats = [w.sets&&w.sets+'sets', w.reps&&w.reps+'reps', w.weight&&w.weight+'lbs', w.dur&&w.dur+'min'].filter(Boolean).join(' · ');
+    const stats = (Array.isArray(w.setList) && w.setList.length)
+      ? w.setList.length + ' sets: ' + w.setList.map(s=>`${s.reps||'?'}×${s.weight||'0'}`).join(', ')
+      : [w.sets&&w.sets+'sets', w.reps&&w.reps+'reps', w.weight&&w.weight+'lbs', w.dur&&w.dur+'min'].filter(Boolean).join(' · ');
     const metaLine = [stats, fmt(w.date)].filter(Boolean).join(' · ');
     return `
     <div class="list-item">
@@ -3333,6 +3479,9 @@ function weekKey(dateStr) {
   return localDate(d);
 }
 function exVolume(w) {
+  if(Array.isArray(w.setList) && w.setList.length) {
+    return w.setList.reduce((sum,s)=> sum + (parseFloat(s.reps)||0)*(parseFloat(s.weight)||0), 0);
+  }
   const sets = parseFloat(w.sets)||0, reps = parseFloat(w.reps)||0, wt = parseFloat(w.weight)||0;
   return sets * reps * wt;
 }
@@ -4916,7 +5065,7 @@ function renderMobility() {
 }
 
 async function aiSearchMobility() {
-  const input = document.getElementById('mobility-ai-search').value.trim();
+  const input = document.getElementById('mobility-search').value.trim();
   if(!input) { toast('Type a stretch or mobility goal'); return; }
   const key = getAPIKey();
   if(!key) { toast('Add an API key in ⚙ Settings for AI search'); return; }
@@ -5649,6 +5798,7 @@ function openRoutineDetail(id) {
   if(!r) return;
   activeRoutineId = id;
   activeRoutineLog = {};
+  routinePerSet = {};
   const el = document.getElementById('routine-detail-content');
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
@@ -5694,8 +5844,12 @@ function openRoutineDetail(id) {
             <div class="routine-ex-meta">${targetLine}${last?' · last: '+last+'lbs':''}</div>
             ${ex.weightHint && !last ? `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px">📌 ${ex.weightHint}</div>` : ''}
             ${nudge?`<div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin-top:3px">💪 Ready to add weight? Try ${nudge.suggested}lbs (you hit ${nudge.reps} reps @ ${nudge.current}lbs twice)</div>`:''}
-            <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">${logInputs}</div>
-            <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="showDemoInline('${ex.name.replace(/'/g,"")}','rdemo-${i}')">▶ Demo</button>
+            <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap" id="rlog-simple-${i}">${logInputs}</div>
+            <div id="rlog-perset-${i}" style="display:none;margin-top:6px"></div>
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${ex.name.replace(/'/g,"")}','rdemo-${i}')">▶ Demo</button>
+              ${(!isCardio && unit!=='seconds' && unit!=='interval') ? `<button class="btn btn-ghost btn-sm" id="rlog-perset-btn-${i}" onclick="toggleRoutinePerSet(${i}, ${parseInt(ex.sets)||3})">⚙ Per Set</button>` : ''}
+            </div>
             <div class="demo-media" id="rdemo-${i}"></div>
           </div>
         </div>`;
@@ -5720,6 +5874,50 @@ function toggleRoutineEx(i) {
 }
 
 // Log from checklist — uses entered weights, logs checked items (or all if none checked)
+// ===== ROUTINE PER-SET MODE =====
+let routinePerSet = {}; // { exerciseIndex: true } when expanded to per-set rows
+function toggleRoutinePerSet(i, plannedSets) {
+  const box = document.getElementById('rlog-perset-'+i);
+  const simple = document.getElementById('rlog-simple-'+i);
+  const btn = document.getElementById('rlog-perset-btn-'+i);
+  if(routinePerSet[i]) {
+    // collapse back to simple
+    routinePerSet[i] = false;
+    box.style.display = 'none'; box.innerHTML = '';
+    simple.style.display = 'flex';
+    if(btn) { btn.textContent = '⚙ Per Set'; btn.classList.remove('active'); }
+    return;
+  }
+  // expand: pre-fill rows from the simple inputs (or planned target)
+  routinePerSet[i] = true;
+  simple.style.display = 'none';
+  const reps = document.getElementById('rlog-reps-'+i)?.value || '';
+  const weight = document.getElementById('rlog-weight-'+i)?.value || '';
+  const n = Math.max(1, parseInt(document.getElementById('rlog-sets-'+i)?.value) || plannedSets || 3);
+  box.style.display = 'block';
+  box.innerHTML = `<div id="rset-rows-${i}"></div>
+    <button type="button" class="btn btn-ghost btn-sm" style="width:100%;margin-top:4px" onclick="addRoutineSetRow(${i})">+ Add Set</button>`;
+  for(let k=0;k<n;k++) addRoutineSetRow(i, reps, weight);
+  if(btn) { btn.textContent = '⚙ Per Set ✓'; btn.classList.add('active'); }
+}
+function addRoutineSetRow(i, reps, weight) {
+  const rows = document.getElementById('rset-rows-'+i);
+  if(!rows) return;
+  if(reps === undefined && weight === undefined) {
+    const last = rows.querySelector('.rset-row:last-child');
+    if(last) { reps = last.querySelector('.set-reps').value; weight = last.querySelector('.set-weight').value; }
+  }
+  const div = document.createElement('div');
+  div.className = 'rset-row';
+  div.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:5px';
+  div.innerHTML = `
+    <span style="font-family:var(--mono);font-size:10px;color:var(--muted);width:38px;flex:0 0 auto">SET ${rows.children.length+1}</span>
+    <input class="set-reps" type="number" inputmode="numeric" placeholder="reps" min="0" value="${reps??''}" style="flex:1;min-width:0;padding:4px 6px;font-size:11px">
+    <input class="set-weight" type="number" inputmode="decimal" placeholder="lbs" min="0" step="0.5" value="${weight??''}" style="flex:1;min-width:0;padding:4px 6px;font-size:11px">
+    <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.rset-row').remove(); [...document.querySelectorAll('#rset-rows-${i} .rset-row')].forEach((r,k)=>r.querySelector('span').textContent='SET '+(k+1))" style="flex:0 0 auto">✕</button>`;
+  rows.appendChild(div);
+}
+
 function logRoutineFromChecklist(id) {
   const r = DB.routines.find(x=>x.id===id);
   if(!r) return;
@@ -5729,7 +5927,7 @@ function logRoutineFromChecklist(id) {
     if(anyChecked && !activeRoutineLog[i]) return; // skip unchecked when some are checked
     const unit = ex.unit || 'reps';
     const isCardio = ex.cat === 'Cardio';
-    let sets='', reps='', weight='', dur='', noteUnit='';
+    let sets='', reps='', weight='', dur='', noteUnit='', setList=null;
     if(unit==='seconds' || unit==='interval') {
       sets = document.getElementById('rlog-sets-'+i)?.value || ex.sets || '';
       const secs = document.getElementById('rlog-secs-'+i)?.value || ex.reps || '';
@@ -5737,16 +5935,33 @@ function logRoutineFromChecklist(id) {
       noteUnit = unit==='seconds' ? ` (${secs}s holds)` : ` (${sets}×${secs}s intervals)`;
     } else if(isCardio) {
       dur = document.getElementById('rlog-dur-'+i)?.value || ex.dur || '';
+    } else if(routinePerSet[i]) {
+      // per-set mode: read each row
+      const list = [];
+      document.querySelectorAll('#rset-rows-'+i+' .rset-row').forEach(r => {
+        const rp = r.querySelector('.set-reps').value;
+        const wt = r.querySelector('.set-weight').value;
+        if(rp !== '' || wt !== '') list.push({ reps: rp||'', weight: wt||'' });
+      });
+      if(list.length) {
+        setList = list;
+        sets = String(list.length);
+        reps = list[0].reps || '';
+        const same = list.every(s => s.weight === list[0].weight);
+        weight = same ? (list[0].weight||'') : '';
+      }
     } else {
       sets = document.getElementById('rlog-sets-'+i)?.value || ex.sets || '';
       reps = document.getElementById('rlog-reps-'+i)?.value || ex.reps || '';
       weight = document.getElementById('rlog-weight-'+i)?.value || ex.weight || '';
     }
-    DB.workouts.unshift({
+    const wo = {
       id:uid(), name:ex.name, cat:ex.cat||'Strength',
       sets, reps, weight, dur, unit,
       notes:'From routine: '+r.name+noteUnit, date:today()
-    });
+    };
+    if(setList) wo.setList = setList;
+    DB.workouts.unshift(wo);
     logged++;
   });
   save();
@@ -5878,12 +6093,18 @@ function renderAiAlternatives() {
   el.innerHTML = `
     <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Other Options</div>
     ${aiAltList.map((a,i)=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${a.name}</div>
-          <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">${a.category==='Cardio'?(a.duration||'?')+' min':(a.sets||'?')+'×'+(a.reps||'?')+(a.weight?' @ '+a.weight+'lbs':'')}${a.tip?' · 💡 '+a.tip:''}</div>
+      <div style="padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">${a.name}</div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">${a.category==='Cardio'?(a.duration||'?')+' min':(a.sets||'?')+'×'+(a.reps||'?')+(a.weight?' @ '+a.weight+'lbs':'')}${a.tip?' · 💡 '+a.tip:''}</div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${(a.name||'').replace(/'/g,"")}','ai-alt-demo-${i}')" title="Watch demo">▶</button>
+            <button class="btn btn-primary btn-sm" onclick="useAiAlt(${i})">Use</button>
+          </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="useAiAlt(${i})">Use</button>
+        <div class="demo-media" id="ai-alt-demo-${i}"></div>
       </div>`).join('')}
     <button class="btn btn-ghost btn-sm" style="width:100%" onclick="askAI(undefined,true)">↓ Load More Options</button>`;
 }
@@ -5902,10 +6123,21 @@ function fillFromAI() {
   document.getElementById('ex-name').value = aiSuggestion.name || '';
   document.getElementById('ex-cat').value = aiSuggestion.category || 'Strength';
   updateLogFields();
-  document.getElementById('ex-sets').value = aiSuggestion.sets || '';
-  document.getElementById('ex-reps').value = aiSuggestion.reps || '';
-  document.getElementById('ex-weight').value = aiSuggestion.weight || '';
-  document.getElementById('ex-dur').value = aiSuggestion.duration || '';
+  const cat = document.getElementById('ex-cat').value;
+  if(PERSET_CATS.includes(cat)) {
+    // build set rows from AI's sets/reps/weight (same values across sets to start)
+    const nSets = parseInt(aiSuggestion.sets) || 1;
+    const reps = aiSuggestion.reps || '';
+    const weight = aiSuggestion.weight || '';
+    const rows = document.getElementById('setlist-rows');
+    if(rows) { rows.innerHTML = ''; for(let i=0;i<nSets;i++) addSetRow(reps, weight); }
+    document.getElementById('ex-dur2').value = aiSuggestion.duration || '';
+  } else {
+    document.getElementById('ex-sets').value = aiSuggestion.sets || '';
+    document.getElementById('ex-reps').value = aiSuggestion.reps || '';
+    document.getElementById('ex-weight').value = aiSuggestion.weight || '';
+    document.getElementById('ex-dur').value = aiSuggestion.duration || '';
+  }
   document.getElementById('ex-tips').value = aiSuggestion.tip || '';
   document.getElementById('ex-notes').value = '';
   document.getElementById('ex-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
