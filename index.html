@@ -1609,7 +1609,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.11.1</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.11.2</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -5848,7 +5848,7 @@ function openRoutineDetail(id) {
             <div id="rlog-perset-${i}" style="display:none;margin-top:6px"></div>
             <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
               <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${ex.name.replace(/'/g,"")}','rdemo-${i}')">▶ Demo</button>
-              ${(!isCardio && unit!=='seconds' && unit!=='interval') ? `<button class="btn btn-ghost btn-sm" id="rlog-perset-btn-${i}" onclick="toggleRoutinePerSet(${i}, ${parseInt(ex.sets)||3})">⚙ Per Set</button>` : ''}
+              ${(ex.cat!=='Cardio' && unit!=='seconds' && unit!=='interval') ? `<button class="btn btn-ghost btn-sm" id="rlog-perset-btn-${i}" onclick="toggleRoutinePerSet(${i}, ${parseInt(ex.sets)||3})">⚙ Per Set</button>` : ''}
             </div>
             <div class="demo-media" id="rdemo-${i}"></div>
           </div>
