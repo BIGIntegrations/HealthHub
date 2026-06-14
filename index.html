@@ -339,6 +339,10 @@
 
   /* HEALTH METRICS */
   .metric-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .metric-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 8px; text-align: center; min-width: 0; }
+  .metric-label { font-family: var(--mono); font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; margin-bottom: 3px; white-space: nowrap; }
+  .metric-value { font-weight: 800; color: var(--accent); line-height: 1.1; white-space: nowrap; }
+  .metric-sub { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
   .metric-tile { background: var(--bg3); border-radius: 10px; padding: 14px; }
   .mt-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
   .mt-val { font-size: 24px; font-weight: 800; letter-spacing: -1px; }
@@ -1625,7 +1629,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.14.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.14.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -2206,10 +2210,10 @@ function renderWorkouts() {
   const anyReal = weekItems.some(w=>workoutCalories(w).real);
   let statsHtml = '';
   if(weekItems.length) {
-    statsHtml = `<div class="metric-row" style="margin-bottom:14px">
+    statsHtml = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
       <div class="metric-card"><div class="metric-label">This Week</div><div class="metric-value" style="font-size:20px">${weekItems.length}</div><div class="metric-sub">workouts</div></div>
       <div class="metric-card"><div class="metric-label">Volume</div><div class="metric-value" style="font-size:20px">${weekVolume.toLocaleString()}</div><div class="metric-sub">lbs lifted</div></div>
-      <div class="metric-card"><div class="metric-label">Burned</div><div class="metric-value" style="font-size:20px">~${weekCals.toLocaleString()}</div><div class="metric-sub">est. cal</div></div>
+      <div class="metric-card"><div class="metric-label">Burned</div><div class="metric-value" style="font-size:20px">${weekCals.toLocaleString()}</div><div class="metric-sub">est. cal</div></div>
     </div>`;
   }
 
