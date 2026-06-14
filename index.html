@@ -211,7 +211,7 @@
   .cal-dow { font-family: var(--mono); font-size: 9px; color: var(--muted); text-align: center; padding: 4px 0; text-transform: uppercase; min-width: 0; }
   .cal-cell { aspect-ratio: 1; background: var(--bg3); border: 1px solid transparent; border-radius: 8px; padding: 2px; cursor: pointer; display: flex; flex-direction: column; align-items: center; transition: all .15s; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
   .cal-cell:hover { border-color: var(--accent); }
-  .cal-cell.empty { background: transparent; cursor: default; }
+  .cal-cell.cal-empty { background: transparent; cursor: default; border: none; }
   .cal-cell.today { border-color: var(--accent); }
   .cal-cell.selected { border-color: var(--accent); background: rgba(0,229,160,.08); }
   .cal-daynum { font-family: var(--mono); font-size: 11px; color: var(--text); }
@@ -1521,7 +1521,7 @@
       <button class="btn btn-primary" style="width:100%" onclick="estimateMeal()">🤖 Estimate & Log</button>
       <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="openMealPhoto()">📷 Snap or Upload a Meal Photo</button>
       <input type="file" id="meal-photo-input" accept="image/*" style="display:none" onchange="handleMealPhoto(event)">
-      <p style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:6px;text-align:center">Photo goes to Gemini for the estimate, then it's discarded — never saved.</p>
+      <p style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:6px;text-align:center">Tip: type "McDonald's Big Mac" etc. in the box above before snapping — the AI uses it for exact menu nutrition. Photo is discarded after, never saved.</p>
       <div class="ai-loading" id="meal-loading"><div class="ai-spinner"></div>Estimating calories...</div>
       <div id="meal-result"></div>
     </div>
@@ -1625,7 +1625,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.13.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.14.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -2606,7 +2606,7 @@ function renderCalendar() {
   const monthKey = calYear+'-'+(calMonth+1);
 
   let cells = '';
-  for(let i=0;i<firstDow;i++) cells += '<div class="cal-cell empty"></div>';
+  for(let i=0;i<firstDow;i++) cells += '<div class="cal-cell cal-empty"></div>';
   for(let day=1; day<=daysInMonth; day++){
     const billsToday = DB.bills.filter(b => b.day === day);
     const dots = billsToday.slice(0,4).map(b=>{
@@ -3354,7 +3354,7 @@ function renderMedCalendar() {
   const daysInMonth = new Date(y, mo+1, 0).getDate();
   const todayStr = today();
   let cells = '';
-  for(let i=0;i<firstDow;i++) cells += '<div class="cal-cell empty"></div>';
+  for(let i=0;i<firstDow;i++) cells += '<div class="cal-cell cal-empty"></div>';
   for(let day=1; day<=daysInMonth; day++) {
     const ds = `${y}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     const isToday = ds===todayStr;
@@ -3393,17 +3393,32 @@ function medCalSelect(ds) {
   const detail = document.getElementById('med-cal-detail');
   if(!detail) return;
   const log = DB.medLog[ds] || {};
+  const isFuture = ds > today();
   const rows = DB.meds.map(m => {
     const taken = !!log[m.id];
-    return `<div style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;padding:2px 0">
-      <span style="color:${taken?'var(--accent)':'var(--danger)'}">${taken?'✓':'✕'}</span>
+    return `<div onclick="${isFuture?'':`toggleMedOnDate('${ds}','${m.id}')`}" style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;padding:6px 0;${isFuture?'opacity:.4':'cursor:pointer'}">
+      <span style="color:${taken?'var(--accent)':'var(--danger)'};font-size:14px">${taken?'✓':'○'}</span>
       <span style="color:${taken?'var(--text)':'var(--muted)'}">${m.name}</span>
+      ${isFuture?'':'<span style="margin-left:auto;font-size:9px;color:var(--muted)">tap to toggle</span>'}
     </div>`;
   }).join('');
-  detail.innerHTML = `<div style="background:var(--bg3);border-radius:8px;padding:10px">
-    <div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:6px">${fmt(ds)}</div>
+  detail.innerHTML = `<div style="background:var(--bg3);border-radius:8px;padding:12px">
+    <div style="font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:8px;font-weight:700">${fmt(ds)}${ds===today()?' (today)':''}</div>
     ${rows || '<span style="font-family:var(--mono);font-size:11px;color:var(--muted)">No meds tracked</span>'}
+    ${isFuture?'<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px">Future date — can\'t log yet</div>':''}
   </div>`;
+}
+
+// Toggle a med's taken state for any past/present date (retroactive logging)
+function toggleMedOnDate(ds, medId) {
+  if(ds > today()) return;
+  if(!DB.medLog[ds]) DB.medLog[ds] = {};
+  DB.medLog[ds][medId] = !DB.medLog[ds][medId];
+  if(!DB.medLog[ds][medId]) delete DB.medLog[ds][medId];
+  save();
+  renderMedCalendar();
+  medCalSelect(ds); // refresh the detail panel
+  if(ds === today()) renderMeds(); // keep today's checklist in sync
 }
 
 function renderMedHistoryList() {
@@ -3824,13 +3839,16 @@ function renderMealEstimate(data, desc) {
   const confColor = data.confidence==='high'?'var(--accent)':data.confidence==='medium'?'var(--accent2)':'var(--danger)';
   result.innerHTML = `
     <div class="equip-detail show" style="margin-top:14px">
-      ${desc?`<div style="font-family:var(--mono);font-size:11px;color:var(--text);margin-bottom:6px">${desc}</div>`:''}
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:28px;font-weight:800;color:var(--accent)">${data.calories} <span style="font-size:14px;color:var(--muted)">cal</span></div>
-        <span class="tag" style="color:${confColor}">${data.confidence} confidence</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <input id="est-name" value="${(desc||'').replace(/"/g,'&quot;')}" style="flex:1;font-size:13px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;margin-right:8px" placeholder="meal name">
+        <span class="tag" style="color:${confColor};flex:0 0 auto">${data.confidence} confidence</span>
       </div>
-      <div style="display:flex;gap:12px;margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--text)">
-        <span>P: ${data.protein_g||0}g</span><span>C: ${data.carbs_g||0}g</span><span>F: ${data.fat_g||0}g</span>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:8px">Edit any value before logging:</div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1.4"><label style="font-size:9px;color:var(--muted)">CALORIES</label><input id="est-cal" type="number" inputmode="numeric" value="${data.calories||0}" style="width:100%;font-size:18px;font-weight:700;color:var(--accent);background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 8px"></div>
+        <div style="flex:1"><label style="font-size:9px;color:var(--muted)">P (g)</label><input id="est-p" type="number" inputmode="numeric" value="${data.protein_g||0}" style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 8px"></div>
+        <div style="flex:1"><label style="font-size:9px;color:var(--muted)">C (g)</label><input id="est-c" type="number" inputmode="numeric" value="${data.carbs_g||0}" style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 8px"></div>
+        <div style="flex:1"><label style="font-size:9px;color:var(--muted)">F (g)</label><input id="est-f" type="number" inputmode="numeric" value="${data.fat_g||0}" style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 8px"></div>
       </div>
       ${data.breakdown?`<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px">${data.breakdown}</div>`:''}
       <button class="btn btn-primary btn-sm" style="margin-top:12px;width:100%" onclick="confirmLogMeal()">✓ Add to Today</button>
@@ -3858,11 +3876,12 @@ function handleMealPhoto(event) {
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
       const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
       try {
-        const prompt = `This is a photo of food/a meal. Identify it and estimate the nutrition for the visible portion. Respond ONLY with valid JSON, no markdown:
-{ "meal_name": "short description of what you see", "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "confidence": "high|medium|low", "breakdown": "one short line of items and rough calories" }`;
-        const text = await callAIWithImage(prompt, base64, 500);
+        const ctx = (document.getElementById('meal-input')?.value || '').trim();
+        const prompt = `This is a photo of food/a meal. Identify it and estimate the nutrition for the visible portion.${ctx ? ` IMPORTANT CONTEXT from the user: "${ctx}". If this names a restaurant or chain (e.g. McDonald's, Chipotle, Chick-fil-A) or a specific menu item, use that brand's known published nutrition data for accuracy instead of guessing from the image alone.` : ''} Respond ONLY with valid JSON, no markdown:
+{ "meal_name": "short description${ctx ? ' (include the restaurant/item from context if given)' : ''}", "calories": number, "protein_g": number, "carbs_g": number, "fat_g": number, "confidence": "high|medium|low", "breakdown": "one short line of items and rough calories" }`;
+        const text = await callAIWithImage(prompt, base64, 600);
         const data = parseMealJson(text);
-        renderMealEstimate(data, data.meal_name || 'Photo meal');
+        renderMealEstimate(data, data.meal_name || ctx || 'Photo meal');
       } catch(err) {
         result.innerHTML = `<p style="font-family:var(--mono);font-size:12px;color:var(--accent2);margin-top:10px">Couldn't read the photo (${err.message}). Type the meal instead.</p>`;
       } finally {
@@ -3900,15 +3919,21 @@ function confirmLogMeal() {
   const m = window._lastMealEstimate;
   if(!m) return;
   if(!DB.meals) DB.meals = [];
+  // read possibly-edited values
+  const cal = parseInt(document.getElementById('est-cal')?.value) || 0;
+  const p = parseInt(document.getElementById('est-p')?.value) || 0;
+  const c = parseInt(document.getElementById('est-c')?.value) || 0;
+  const f = parseInt(document.getElementById('est-f')?.value) || 0;
+  const name = (document.getElementById('est-name')?.value || '').trim() || m.input;
   DB.meals.unshift({
-    id: uid(), desc: m.input, type: document.getElementById('meal-type').value,
-    calories: m.calories||0, protein: m.protein_g||0, carbs: m.carbs_g||0, fat: m.fat_g||0,
+    id: uid(), desc: name, type: document.getElementById('meal-type').value,
+    calories: cal, protein: p, carbs: c, fat: f,
     date: today()
   });
   save();
   document.getElementById('meal-input').value = '';
   document.getElementById('meal-result').innerHTML = '';
-  toast(`${m.calories} cal logged ✓`);
+  toast(`${cal} cal logged ✓`);
   renderMeals2();
 }
 
