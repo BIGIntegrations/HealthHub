@@ -949,7 +949,13 @@
       <button type="button" class="btn btn-ghost btn-sm" style="width:100%;margin-top:4px" onclick="addEditSetRow()">+ Add Set</button>
     </div>
     <div class="input-row ir-2">
-      <div><label>Duration (min)</label><input type="number" id="edit-w-dur" min="0"></div>
+      <div><label>Duration (min : sec)</label>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="number" id="edit-w-dur" min="0" style="text-align:center">
+          <span style="font-weight:700;color:var(--muted)">:</span>
+          <input type="number" id="edit-w-dursec" min="0" max="59" placeholder="00" style="text-align:center">
+        </div>
+      </div>
       <div><label>⌚ Calories</label><input type="number" id="edit-w-cals" min="0"></div>
     </div>
     <div class="input-row"><div><label>Tips</label><input id="edit-w-tips"></div></div>
@@ -1707,7 +1713,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.16.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.17.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -1855,13 +1861,21 @@ function getBodyWeightLbs() {
 function estimateCalories(w) {
   const met = MET_VALUES[w.cat] || 4;
   const kg = getBodyWeightLbs() / 2.205;
-  let mins = parseFloat(w.dur) || 0;
+  let mins = (parseFloat(w.dur) || 0) + (parseFloat(w.durSec) || 0)/60;
   if(!mins) {
     // estimate from sets: ~3 min per set incl rest
     const sets = parseInt(w.sets) || 0;
     mins = sets ? sets * 3 : 10;
   }
   return Math.round(met * kg * (mins/60));
+}
+// Human-readable duration: shows M:SS when exact seconds are present, else M min
+function fmtDur(w) {
+  const m = parseInt(w.dur)||0;
+  const s = parseInt(w.durSec)||0;
+  if(!m && !s) return '';
+  if(s) return m + ':' + String(s).padStart(2,'0') + ' min';
+  return m + ' min';
 }
 // Returns {cal, real} — real watch number if present, else MET estimate
 function workoutCalories(w) {
@@ -2084,7 +2098,14 @@ function renderCardioFields() {
     const row = fields.slice(i,i+3);
     const cls = row.length===1?'':row.length===2?'ir-2':'ir-3';
     html += `<div class="input-row ${cls}">` + row.map(f=>
-      `<div><label>${f.label}</label><input type="number" id="cardio-${f.id}" ${f.step?`step="${f.step}"`:''} min="0" placeholder="${f.ph||''}"></div>`
+      f.id==='dur'
+        ? `<div><label>Duration (min : sec)</label>
+             <div style="display:flex;align-items:center;gap:4px">
+               <input type="number" id="cardio-dur" min="0" placeholder="0" style="text-align:center">
+               <span style="font-weight:700;color:var(--muted)">:</span>
+               <input type="number" id="cardio-dursec" min="0" max="59" placeholder="00" style="text-align:center">
+             </div></div>`
+        : `<div><label>${f.label}</label><input type="number" id="cardio-${f.id}" ${f.step?`step="${f.step}"`:''} min="0" placeholder="${f.ph||''}"></div>`
     ).join('') + `</div>`;
   }
   document.getElementById('cardio-fields').innerHTML = html;
@@ -2095,9 +2116,10 @@ function logCardioManual() {
   const machine = document.getElementById('cardio-machine').value;
   const fields = CARDIO_FIELDS[machine];
   const dur = getCardioVal('dur');
+  const durSec = getCardioVal('dursec');
   const cals = getCardioVal('cals');
   // require at least something meaningful
-  const hasData = fields.some(f => getCardioVal(f.id));
+  const hasData = fields.some(f => getCardioVal(f.id)) || !!durSec;
   if(!hasData) { toast('Enter at least one value'); return; }
   // Build notes from all non-duration/non-cal fields that have values
   const noteParts = [];
@@ -2112,13 +2134,14 @@ function logCardioManual() {
   });
   DB.workouts.unshift({
     id: uid(), name: machine, cat: 'Cardio',
-    sets:'', reps:'', weight:'', dur: dur||'', cals: cals||'',
+    sets:'', reps:'', weight:'', dur: dur||'', durSec: durSec||'', cals: cals||'',
     tips:'', notes: noteParts.join(' · '), date: document.getElementById('cardio-date').value || today()
   });
   save();
   const realCal = parseInt(cals)||0;
-  toast(`${machine} logged ✓ ${realCal?'⌚'+realCal:'~'+estimateCalories({cat:'Cardio',dur})} cal`);
+  toast(`${machine} logged ✓ ${realCal?'⌚'+realCal:'~'+estimateCalories({cat:'Cardio',dur,durSec})} cal`);
   fields.forEach(f => { const el=document.getElementById('cardio-'+f.id); if(el) el.value=''; });
+  const secEl=document.getElementById('cardio-dursec'); if(secEl) secEl.value='';
   const cd=document.getElementById('cardio-date'); if(cd) cd.value='';
   document.getElementById('cardio-photo-result').innerHTML='';
   renderWorkouts();
@@ -2159,8 +2182,8 @@ async function handleCardioPhoto(event) {
     const images = await Promise.all(files.map(f => fileToResizedBase64(f)));
     const multi = images.length > 1;
     const prompt = `${multi ? `These are ${images.length} photos of the SAME cardio workout — the machine's summary screen rotates through multiple pages, so each photo may show different metrics. MERGE them into ONE result.` : `This is a photo of a cardio machine's summary/workout screen.`} Read the numbers and respond ONLY with valid JSON, no markdown:
-{ "machine": "Treadmill|Stair Climber|Bike|Elliptical|Rower|Other Cardio", "duration_min": number_or_null, "distance_mi": number_or_null, "speed_mph": number_or_null, "incline_pct": number_or_null, "level": number_or_null, "floors": number_or_null, "steps": number_or_null, "watts": number_or_null, "calories": number_or_null, "avg_hr": number_or_null }
-If a value isn't visible in any photo use null.${multi ? ' If the same metric appears on more than one photo, prefer the non-null value; if they differ, use the LARGER number (it represents the more complete/final reading).' : ''} Convert any MM:SS time to total minutes (rounded). For a stair machine: "floors" is floors/levels climbed, "steps" is total steps, "watts" is power output, "level" is the resistance/speed level.`;
+{ "machine": "Treadmill|Stair Climber|Bike|Elliptical|Rower|Other Cardio", "duration_min": number_or_null, "duration_sec": number_or_null, "distance_mi": number_or_null, "speed_mph": number_or_null, "incline_pct": number_or_null, "level": number_or_null, "floors": number_or_null, "steps": number_or_null, "watts": number_or_null, "calories": number_or_null, "avg_hr": number_or_null }
+If a value isn't visible in any photo use null.${multi ? ' If the same metric appears on more than one photo, prefer the non-null value; if they differ, use the LARGER number (it represents the more complete/final reading).' : ''} TIME: read the EXACT time shown — do NOT round. If the screen shows MM:SS (e.g. 23:47), set "duration_min" to the whole minutes (23) and "duration_sec" to the seconds (47). If it shows only minutes, set duration_sec to 0. For a stair machine: "floors" is floors/levels climbed, "steps" is total steps, "watts" is power output, "level" is the resistance/speed level.`;
     const text = await callAIWithImage(prompt, images, 900);
     const clean = text.replace(/```json|```/g,'').trim();
     const m = clean.match(/\{[\s\S]*\}/);
@@ -2168,7 +2191,7 @@ If a value isn't visible in any photo use null.${multi ? ' If the same metric ap
     if(data.machine) { document.getElementById('cardio-machine').value = data.machine; }
     renderCardioFields();
     const setIf = (id,val)=>{ const el=document.getElementById('cardio-'+id); if(el&&val!=null) el.value=val; };
-    setIf('dur',data.duration_min); setIf('dist',data.distance_mi); setIf('speed',data.speed_mph);
+    setIf('dur',data.duration_min); setIf('dursec',data.duration_sec); setIf('dist',data.distance_mi); setIf('speed',data.speed_mph);
     setIf('incline',data.incline_pct); setIf('level',data.level); setIf('floors',data.floors);
     setIf('steps',data.steps); setIf('watts',data.watts);
     setIf('cals',data.calories); setIf('hr',data.avg_hr);
@@ -2201,6 +2224,7 @@ function openEditWorkout(id) {
     document.getElementById('edit-w-weight').value = w.weight || '';
   }
   document.getElementById('edit-w-dur').value = w.dur || '';
+  document.getElementById('edit-w-dursec').value = w.durSec || '';
   document.getElementById('edit-w-cals').value = w.cals || '';
   document.getElementById('edit-w-tips').value = w.tips || '';
   document.getElementById('edit-w-notes').value = w.notes || '';
@@ -2251,6 +2275,7 @@ function saveEditWorkout() {
     w.weight = document.getElementById('edit-w-weight').value || '';
   }
   w.dur = document.getElementById('edit-w-dur').value || '';
+  w.durSec = document.getElementById('edit-w-dursec').value || '';
   w.cals = document.getElementById('edit-w-cals').value || '';
   w.tips = document.getElementById('edit-w-tips').value.trim();
   w.notes = document.getElementById('edit-w-notes').value.trim();
@@ -2305,7 +2330,7 @@ function renderWorkouts() {
     const vol = workoutVolume(w);
     const stats = (Array.isArray(w.setList) && w.setList.length)
       ? w.setList.length + ' sets: ' + w.setList.map(s=>`${s.reps||'?'}×${s.weight||'0'}`).join(', ')
-      : [w.sets&&w.sets+'sets', w.reps&&w.reps+'reps', w.weight&&w.weight+'lbs', w.dur&&w.dur+'min'].filter(Boolean).join(' · ');
+      : [w.sets&&w.sets+'sets', w.reps&&w.reps+'reps', w.weight&&w.weight+'lbs', fmtDur(w)].filter(Boolean).join(' · ');
     const metaLine = [stats, fmt(w.date)].filter(Boolean).join(' · ');
     return `
     <div class="list-item">
@@ -5554,6 +5579,127 @@ async function showDemoInline(exName, boxId) {
   box.innerHTML = html;
 }
 
+// ===== TARGET MUSCLE MAP =====
+// Maps an exercise (name + optional "muscles" text) to body regions, then draws
+// a front/back figure with the worked areas in red. No external deps — pure SVG.
+const MUSCLE_LABELS = {
+  chest:'Chest', delts:'Shoulders (front)', delts_rear:'Shoulders (rear)',
+  biceps:'Biceps', triceps:'Triceps', forearms:'Forearms', abs:'Abs',
+  obliques:'Obliques', traps:'Traps', lats:'Lats', upperback:'Upper back',
+  lowerback:'Lower back', glutes:'Glutes', quads:'Quads', hamstrings:'Hamstrings', calves:'Calves'
+};
+// keyword -> { p:[primary regions], s:[secondary/synergist regions] }
+const MUSCLE_RULES = [
+  [/rear delt|reverse fly|reverse pec|face pull/, {p:['delts_rear'],s:['upperback','traps']}],
+  [/lateral raise|side delt|lat raise/, {p:['delts'],s:['delts_rear']}],
+  [/shoulder press|overhead press|military|arnold|shoulder/, {p:['delts'],s:['triceps','delts_rear']}],
+  [/\bdelt/, {p:['delts','delts_rear'],s:[]}],
+  [/incline (chest|press|bench)/, {p:['chest','delts'],s:['triceps']}],
+  [/chest|pec|bench press|push.?up|dip|fly/, {p:['chest'],s:['delts','triceps']}],
+  [/pulldown|pull.?up|pull.?down|chin.?up/, {p:['lats'],s:['biceps','upperback']}],
+  [/\blat\b|lats/, {p:['lats'],s:['biceps']}],
+  [/\brow\b|seated row|cable row|rhomboid|mid.?back|upper back/, {p:['upperback','lats'],s:['biceps','delts_rear']}],
+  [/shrug|\btrap/, {p:['traps'],s:['delts_rear']}],
+  [/back extension|hyperext|erector|lower back/, {p:['lowerback'],s:['glutes','hamstrings']}],
+  [/leg curl|hamstring|romanian|rdl|deadlift|stiff.?leg/, {p:['hamstrings'],s:['glutes','lowerback']}],
+  [/leg extension|quad/, {p:['quads'],s:[]}],
+  [/squat|leg press|lunge|hack/, {p:['quads','glutes'],s:['hamstrings']}],
+  [/calf|calve|heel raise/, {p:['calves'],s:[]}],
+  [/hip thrust|glute|abduction|adduction/, {p:['glutes'],s:['quads']}],
+  [/tricep|pushdown|push.?down|skull|kickback|extension machine/, {p:['triceps'],s:[]}],
+  [/bicep|curl/, {p:['biceps'],s:['forearms']}],
+  [/forearm|wrist|grip/, {p:['forearms'],s:[]}],
+  [/oblique|rotary|twist|side bend|wood ?chop/, {p:['obliques'],s:['abs']}],
+  [/\bab\b|abs|crunch|sit.?up|plank|leg raise|core/, {p:['abs'],s:['obliques']}],
+];
+// muscle-text words -> region (used when a "muscles" string is provided)
+const MUSCLE_WORD_MAP = {
+  chest:'chest', pec:'chest', 'front delt':'delts', 'side delt':'delts', shoulder:'delts',
+  delt:'delts', 'rear delt':'delts_rear', tricep:'triceps', bicep:'biceps', forearm:'forearms',
+  lat:'lats', 'upper back':'upperback', 'mid-back':'upperback', 'mid back':'upperback',
+  rhomboid:'upperback', trap:'traps', 'lower back':'lowerback', erector:'lowerback',
+  abs:'abs', oblique:'obliques', glute:'glutes', abductor:'glutes', adductor:'glutes',
+  quad:'quads', hamstring:'hamstrings', calf:'calves', calve:'calves'
+};
+function getMuscleTargets(name, muscles) {
+  const primary = new Set(), secondary = new Set();
+  const n = (name||'').toLowerCase();
+  // 1) Rule-match on the exercise name (first matching rule wins for primary)
+  for(const [re, map] of MUSCLE_RULES) {
+    if(re.test(n)) { map.p.forEach(r=>primary.add(r)); map.s.forEach(r=>secondary.add(r)); break; }
+  }
+  // 2) Augment from the muscles text if present (word-boundary match to avoid "ab" in "abductor")
+  if(muscles) {
+    const m = ' ' + muscles.toLowerCase().replace(/[^a-z ]/g,' ') + ' ';
+    Object.keys(MUSCLE_WORD_MAP).forEach(w => {
+      if(new RegExp('\\b'+w.replace(/[-/]/g,'.')).test(m)) primary.add(MUSCLE_WORD_MAP[w]);
+    });
+  }
+  // de-dup: a region can't be both primary and secondary
+  secondary.forEach(r => { if(primary.has(r)) secondary.delete(r); });
+  return { primary, secondary };
+}
+function bodyMapSVG(primary, secondary) {
+  const PRI = '#e5484d', SEC = 'rgba(229,72,77,0.38)', BASE = 'var(--bg3)', STROKE = 'var(--border)', NEU = 'var(--muted)';
+  const fill = k => primary.has(k) ? PRI : (secondary.has(k) ? SEC : BASE);
+  const r = (key, x, y, w, h, rad) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rad||4}" fill="${fill(key)}" stroke="${STROKE}" stroke-width="0.6"/>`;
+  const e = (key, cx, cy, rx, ry) => `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill(key)}" stroke="${STROKE}" stroke-width="0.6"/>`;
+  const poly = (key, pts) => `<polygon points="${pts}" fill="${fill(key)}" stroke="${STROKE}" stroke-width="0.6"/>`;
+  const neu = (cx, cy, rr) => `<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${NEU}" opacity="0.4"/>`;
+  // FRONT (cx 60)                                          BACK (cx 180)
+  return `<svg viewBox="0 0 240 162" width="100%" style="max-width:340px;display:block;margin:6px auto">
+    <!-- FRONT -->
+    ${neu(60,15,9)}<rect x="55" y="22" width="10" height="6" rx="2" fill="${NEU}" opacity="0.4"/>
+    ${e('delts',41,37,9,7)}${e('delts',79,37,9,7)}
+    ${r('chest',46,32,13,15,4)}${r('chest',61,32,13,15,4)}
+    ${r('biceps',30,44,9,19,4)}${r('biceps',81,44,9,19,4)}
+    ${r('forearms',27,64,8,19,4)}${r('forearms',85,64,8,19,4)}
+    ${neu(31,86,4)}${neu(89,86,4)}
+    ${r('obliques',45,50,7,24,3)}${r('obliques',68,50,7,24,3)}
+    ${r('abs',52,49,16,26,3)}
+    ${r('quads',48,80,11,33,5)}${r('quads',61,80,11,33,5)}
+    ${r('calves',49,115,9,30,4)}${r('calves',62,115,9,30,4)}
+    ${neu(53,150,4)}${neu(67,150,4)}
+    <text x="60" y="160" text-anchor="middle" font-size="7" fill="${NEU}" font-family="monospace">FRONT</text>
+    <!-- BACK -->
+    ${neu(180,15,9)}<rect x="175" y="22" width="10" height="6" rx="2" fill="${NEU}" opacity="0.4"/>
+    ${poly('traps','168,29 192,29 187,43 173,43')}
+    ${e('delts_rear',161,37,9,7)}${e('delts_rear',199,37,9,7)}
+    ${r('upperback',170,40,20,11,3)}
+    ${poly('lats','171,51 171,69 162,57')}${poly('lats','189,51 189,69 198,57')}
+    ${r('triceps',150,44,9,19,4)}${r('triceps',201,44,9,19,4)}
+    ${r('forearms',147,64,8,19,4)}${r('forearms',205,64,8,19,4)}
+    ${neu(151,86,4)}${neu(209,86,4)}
+    ${r('lowerback',172,62,16,14,3)}
+    ${r('glutes',170,77,10,15,5)}${r('glutes',180,77,10,15,5)}
+    ${r('hamstrings',168,92,11,26,5)}${r('hamstrings',181,92,11,26,5)}
+    ${r('calves',169,120,10,26,4)}${r('calves',181,120,10,26,4)}
+    ${neu(173,150,4)}${neu(187,150,4)}
+    <text x="180" y="160" text-anchor="middle" font-size="7" fill="${NEU}" font-family="monospace">BACK</text>
+  </svg>`;
+}
+function muscleLegend(primary, secondary) {
+  const chip = (k,cls)=>`<span style="display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;margin:2px 6px 2px 0"><span style="width:9px;height:9px;border-radius:2px;background:${cls}"></span>${MUSCLE_LABELS[k]||k}</span>`;
+  let out = '';
+  primary.forEach(k=>out+=chip(k,'#e5484d'));
+  secondary.forEach(k=>out+=chip(k,'rgba(229,72,77,0.38)'));
+  return out || '<span style="font-family:var(--mono);font-size:10px;color:var(--muted)">Full-body / cardio — no single target</span>';
+}
+function toggleMuscleMap(exName, muscles, boxId) {
+  const box = document.getElementById(boxId);
+  if(!box) return;
+  if(box.innerHTML.trim() !== '') { box.innerHTML = ''; return; }
+  const { primary, secondary } = getMuscleTargets(exName, muscles);
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <div class="equip-detail-label" style="margin:0">🎯 Where you should feel it</div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('${boxId}').innerHTML=''">✕</button>
+    </div>
+    ${bodyMapSVG(primary, secondary)}
+    <div style="margin-top:4px">${muscleLegend(primary, secondary)}</div>
+    <p style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px">Red = primary mover · faded = assisting muscles. If you feel it somewhere else entirely, your form or setup may need a tweak.</p>`;
+}
+
 async function showYtClips(exName, boxId) {
   const box = document.getElementById(boxId || 'yt-clips-box');
   if(!box) return;
@@ -5739,7 +5885,8 @@ function normalizeImportedExercise(s) {
     dur: parseFloat(s.duration) || 0,
     unit,
     weightHint: s.weightHint || '',
-    tips: s.tip || s.notes || ''
+    tips: s.tip || s.notes || '',
+    setup: s.setup || ''
   };
 }
 
@@ -5761,7 +5908,7 @@ function renderRoutineAddList() {
 
 function addEquipToRoutine(idx) {
   const e = PF_EQUIPMENT[idx];
-  builderExercises.push({ name:e.name, sets:e.sets, reps:e.reps, weight:e.weight, dur:e.dur, cat:e.cat==='Cardio'?'Cardio':'Strength', tips:e.tips });
+  builderExercises.push({ name:e.name, sets:e.sets, reps:e.reps, weight:e.weight, dur:e.dur, cat:e.cat==='Cardio'?'Cardio':'Strength', tips:e.tips, muscles:e.muscles||'', setup:'' });
   renderBuilderList();
   toast(e.name+' added');
 }
@@ -5940,6 +6087,10 @@ function renderBuilderList() {
             </select>
             ${unit==='reps'&&!isCardio?`<input value="${ex.weightHint||''}" placeholder="weight hint (e.g. 40-70 lb)" onchange="builderExercises[${i}].weightHint=this.value" style="flex:1;min-width:120px;padding:3px 6px;font-size:10px;font-family:var(--mono)">`:''}
           </div>
+          <div style="display:flex;gap:6px;margin-top:5px;align-items:center">
+            <span style="font-size:11px">🪑</span>
+            <input value="${(ex.setup||'').replace(/"/g,'&quot;')}" placeholder="setup reminder — seat height, pad, notch…" onchange="builderExercises[${i}].setup=this.value" style="flex:1;min-width:120px;padding:3px 6px;font-size:10px;font-family:var(--mono)">
+          </div>
         </div>
         <button class="btn btn-danger btn-sm" onclick="removeBuilderEx(${i})">✕</button>
       </div>
@@ -6116,9 +6267,9 @@ function loadRoutineDraft(id) {
 function saveRoutineDraft() {
   if(!activeRoutineId) return;
   const exCount = document.querySelectorAll('#routine-detail-exercises .routine-ex-row').length;
-  const state = { ts: Date.now(), checks: {...activeRoutineLog}, perSet: {...routinePerSet}, fields: {}, sets: {} };
+  const state = { ts: Date.now(), checks: {...activeRoutineLog}, perSet: {...routinePerSet}, swaps: {...routineSwaps}, fields: {}, sets: {} };
   for(let i=0;i<exCount;i++) {
-    ['sets','reps','weight','secs','dur'].forEach(f=>{
+    ['sets','reps','weight','secs','dur','note'].forEach(f=>{
       const el = document.getElementById(`rlog-${f}-${i}`);
       if(el) state.fields[`${f}-${i}`] = el.value;
     });
@@ -6142,6 +6293,14 @@ function restoreRoutineDraft(id) {
     if(btn && activeRoutineLog[i]) { btn.classList.add('done'); btn.textContent='✓'; }
   });
   Object.entries(d.fields||{}).forEach(([k,v])=>{ const el=document.getElementById('rlog-'+k); if(el) el.value=v; });
+  // reveal any session notes that have content so they aren't hidden/forgotten
+  document.querySelectorAll('[id^="rlog-note-"]').forEach(t=>{
+    if(t.value && t.value.trim()) {
+      const i = t.id.replace('rlog-note-','');
+      const box = document.getElementById('rnote-'+i); if(box) box.style.display='block';
+      const btn = document.getElementById('rnotebtn-'+i); if(btn) btn.textContent='📝 Note ✓';
+    }
+  });
   Object.keys(d.perSet||{}).forEach(i=>{
     if(d.perSet[i]) {
       toggleRoutinePerSet(parseInt(i), 0);
@@ -6158,6 +6317,9 @@ function openRoutineDetail(id) {
   activeRoutineId = id;
   activeRoutineLog = {};
   routinePerSet = {};
+  // Temporary (this-session) exercise swaps live in the draft so they survive leave/return.
+  const _draft = loadRoutineDraft(id);
+  routineSwaps = (_draft && _draft.swaps) ? {..._draft.swaps} : {};
   const el = document.getElementById('routine-detail-content');
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
@@ -6167,8 +6329,13 @@ function openRoutineDetail(id) {
     <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px">${r.exercises.length} exercises · check off + punch in your actual weight as you go <span id="routine-draft-indicator" style="color:var(--accent);opacity:0.4;float:right"></span></p>
     <div id="routine-detail-exercises">
       ${r.exercises.map((ex,i)=>{
-        const last = getLastWeight(ex.name);
-        const nudge = getOverloadNudge(ex.name, parseInt(ex.reps));
+        const swap = routineSwaps[i];
+        const dispName = swap ? swap.name : ex.name;            // shown + logged name
+        const dispMuscles = swap ? (swap.muscles||'') : (ex.muscles||'');
+        const nameJs = dispName.replace(/'/g,"").replace(/"/g,'');
+        const muscJs = (dispMuscles||'').replace(/'/g,"").replace(/"/g,'');
+        const last = getLastWeight(dispName);
+        const nudge = getOverloadNudge(dispName, parseInt(ex.reps));
         const startW = ex.cat==='Cardio' ? '' : (last || ex.weight || '');
         const prevSuper = i>0 && r.exercises[i-1].superset;
         const thisSuper = ex.superset && i < r.exercises.length-1;
@@ -6199,15 +6366,27 @@ function openRoutineDetail(id) {
         <div class="routine-ex-row" style="align-items:flex-start;${prevSuper||thisSuper?'border-left:2px solid var(--accent2);padding-left:8px;margin-left:2px':''}">
           <button class="routine-ex-check" id="rchk-${i}" onclick="toggleRoutineEx(${i})">○</button>
           <div class="routine-ex-body">
-            <div class="routine-ex-name">${ssLabel?`<span style="color:var(--accent2);font-family:var(--mono);font-size:11px">${ssLabel}</span> `:''}${ex.name}</div>
+            <div class="routine-ex-name">${ssLabel?`<span style="color:var(--accent2);font-family:var(--mono);font-size:11px">${ssLabel}</span> `:''}${dispName}${swap?` <span style="font-family:var(--mono);font-size:9px;background:rgba(255,170,80,.18);color:var(--accent2);padding:1px 5px;border-radius:8px">⇄ today</span>`:''}</div>
             <div class="routine-ex-meta">${targetLine}${last?' · last: '+last+'lbs':''}</div>
+            ${swap?`<div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:1px">was: ${ex.name} · <a onclick="revertSwap(${i})" style="color:var(--accent2);cursor:pointer">revert</a></div>`:''}
+            <div id="rsetup-display-${i}" style="font-family:var(--mono);font-size:10px;color:var(--accent3);margin-top:2px">${ex.setup?'🪑 '+ex.setup:''}</div>
             ${ex.weightHint && !last ? `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px">📌 ${ex.weightHint}</div>` : ''}
             ${nudge?`<div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin-top:3px">💪 Ready to add weight? Try ${nudge.suggested}lbs (you hit ${nudge.reps} reps @ ${nudge.current}lbs twice)</div>`:''}
             <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap" id="rlog-simple-${i}">${logInputs}</div>
             <div id="rlog-perset-${i}" style="display:none;margin-top:6px"></div>
             <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-              <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${ex.name.replace(/'/g,"")}','rdemo-${i}')">▶ Demo</button>
+              <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${nameJs}','rdemo-${i}')">▶ Demo</button>
+              <button class="btn btn-ghost btn-sm" onclick="toggleMuscleMap('${nameJs}','${muscJs}','rmuscle-${i}')">🎯 Muscles</button>
+              ${ex.cat!=='Cardio' ? `<button class="btn btn-ghost btn-sm" onclick="toggleSwap(${i})">⇄ Swap</button>` : ''}
+              <button class="btn btn-ghost btn-sm" onclick="toggleSetup(${i})">🪑 Setup</button>
+              <button class="btn btn-ghost btn-sm" id="rnotebtn-${i}" onclick="toggleNote(${i})">📝 Note</button>
               ${(ex.cat!=='Cardio' && unit!=='seconds' && unit!=='interval') ? `<button class="btn btn-ghost btn-sm" id="rlog-perset-btn-${i}" onclick="toggleRoutinePerSet(${i}, ${parseInt(ex.sets)||3})">⚙ Per Set</button>` : ''}
+            </div>
+            <div id="rmuscle-${i}"></div>
+            <div id="rswap-${i}"></div>
+            <div id="rsetup-${i}"></div>
+            <div id="rnote-${i}" style="display:none;margin-top:6px">
+              <textarea id="rlog-note-${i}" placeholder="Session note — e.g. tried wider grip, felt it more in chest" oninput="saveRoutineDraft()" style="width:100%;min-height:46px;font-size:12px;padding:6px 8px"></textarea>
             </div>
             <div class="demo-media" id="rdemo-${i}"></div>
           </div>
@@ -6236,6 +6415,133 @@ function onRoutineEdit(i) {
   saveRoutineDraft();
 }
 function closeRoutineDetail() { document.getElementById('routine-detail-modal').classList.remove('open'); activeRoutineId=null; }
+
+// ===== EXERCISE SWAP (temporary for today, or permanent in the routine) =====
+let routineSwaps = {}; // { exerciseIndex: { name, muscles } } — session-only overrides
+function toggleSwap(i) {
+  const box = document.getElementById('rswap-'+i);
+  if(!box) return;
+  if(box.innerHTML.trim() !== '') { box.innerHTML=''; return; }
+  // close other panels for tidiness
+  ['rmuscle','rsetup'].forEach(p=>{ const b=document.getElementById(p+'-'+i); if(b) b.innerHTML=''; });
+  box.innerHTML = `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px;margin-top:6px">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:5px">⇄ Swap this exercise — pick <b>Today</b> (this session only) or <b>Routine</b> (save permanently)</div>
+      <input id="rswap-input-${i}" placeholder="Search or type a machine / exercise" oninput="renderSwapMatches(${i})" style="width:100%;padding:6px 8px;font-size:12px;margin-bottom:6px">
+      <button class="btn btn-ghost btn-sm" onclick="aiSwapAlternatives(${i})" style="width:100%;margin-bottom:6px">🤖 Suggest similar exercises</button>
+      <div class="ai-loading" id="rswap-loading-${i}"><div class="ai-spinner"></div>Finding alternatives...</div>
+      <div id="rswap-matches-${i}"></div>
+    </div>`;
+  renderSwapMatches(i);
+}
+function renderSwapMatches(i, extra) {
+  const inputEl = document.getElementById('rswap-input-'+i);
+  const raw = (inputEl?.value||'').trim();
+  const q = raw.toLowerCase();
+  let cands = [];
+  if(extra && extra.length) cands = extra.slice();
+  if(q) {
+    PF_EQUIPMENT.filter(e => e.name.toLowerCase().includes(q) || (e.muscles||'').toLowerCase().includes(q))
+      .slice(0,6).forEach(e => cands.push({ name:e.name, muscles:e.muscles }));
+    if(!cands.some(c => c.name.toLowerCase() === q)) cands.unshift({ name:raw, muscles:'', custom:true });
+  } else if(!cands.length) {
+    PF_EQUIPMENT.slice(0,5).forEach(e => cands.push({ name:e.name, muscles:e.muscles }));
+  }
+  window._swapCands = window._swapCands || {};
+  window._swapCands[i] = cands;
+  const box = document.getElementById('rswap-matches-'+i);
+  if(!box) return;
+  box.innerHTML = cands.map((c,idx)=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="min-width:0;flex:1">
+        <div style="font-size:12px;font-weight:600">${c.custom?'✏️ ':''}${c.name}</div>
+        ${(c.muscles||c.why)?`<div style="font-family:var(--mono);font-size:9px;color:var(--muted)">${[c.muscles,c.why].filter(Boolean).join(' · ')}</div>`:''}
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="btn btn-ghost btn-sm" onclick="chooseSwap(${i},${idx},'today')">Today</button>
+        <button class="btn btn-primary btn-sm" onclick="chooseSwap(${i},${idx},'routine')">Routine</button>
+      </div>
+    </div>`).join('') || '<div style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:6px 0">Type a name above</div>';
+}
+async function aiSwapAlternatives(i) {
+  const r = DB.routines.find(x=>x.id===activeRoutineId); if(!r) return;
+  const ex = r.exercises[i];
+  const cur = routineSwaps[i] ? routineSwaps[i].name : ex.name;
+  const key = getAPIKey();
+  if(!key) { toast('Add an API key in ⚙ Settings for AI alternatives'); return; }
+  const loading = document.getElementById('rswap-loading-'+i);
+  if(loading) loading.classList.add('show');
+  const prompt = `List 5 alternative gym exercises that train the same primary muscles as "${cur}" but use different equipment or a different movement pattern (e.g. a cable version, a free-weight version, a different machine). Respond ONLY with a valid JSON array, no markdown, no code fences:
+[ { "name":"", "muscles":"primary muscles", "why":"why it's a good swap, under 50 chars" } ]`;
+  try {
+    const text = await callAI(prompt, 700);
+    const clean = text.replace(/```json|```/g,'').trim();
+    const m = clean.match(/\[[\s\S]*\]/);
+    const list = JSON.parse(m ? m[0] : clean);
+    if(Array.isArray(list) && list.length) {
+      renderSwapMatches(i, list.map(x=>({ name:x.name||'', muscles:x.muscles||'', why:x.why||'' })).filter(x=>x.name));
+    } else { toast('No alternatives found'); }
+  } catch(e) { toast('AI error: '+e.message); }
+  finally { if(loading) loading.classList.remove('show'); }
+}
+function chooseSwap(i, idx, mode) {
+  const c = (window._swapCands && window._swapCands[i]) ? window._swapCands[i][idx] : null;
+  if(!c || !c.name) return;
+  if(mode==='today') applyTempSwap(i, c.name, c.muscles);
+  else applyPermSwap(i, c.name, c.muscles);
+}
+function applyTempSwap(i, name, muscles) {
+  routineSwaps[i] = { name, muscles: muscles||'' };
+  saveRoutineDraft();
+  toast('Swapped for today → '+name);
+  openRoutineDetail(activeRoutineId);
+}
+function applyPermSwap(i, name, muscles) {
+  const r = DB.routines.find(x=>x.id===activeRoutineId); if(!r) return;
+  const orig = r.exercises[i].name;
+  if(!confirm(`Replace "${orig}" with "${name}" in the saved routine? This changes the routine going forward.`)) return;
+  r.exercises[i].name = name;
+  if(muscles) r.exercises[i].muscles = muscles;
+  delete routineSwaps[i];
+  save(); saveRoutineDraft();
+  toast('Routine updated → '+name);
+  openRoutineDetail(activeRoutineId);
+}
+function revertSwap(i) {
+  delete routineSwaps[i];
+  saveRoutineDraft();
+  openRoutineDetail(activeRoutineId);
+}
+
+// ===== SETUP / SEAT-HEIGHT REMINDER (permanent, stored on the routine) =====
+function toggleSetup(i) {
+  const box = document.getElementById('rsetup-'+i);
+  if(!box) return;
+  if(box.innerHTML.trim() !== '') { box.innerHTML=''; return; }
+  ['rmuscle','rswap'].forEach(p=>{ const b=document.getElementById(p+'-'+i); if(b) b.innerHTML=''; });
+  const r = DB.routines.find(x=>x.id===activeRoutineId);
+  const cur = (r && r.exercises[i] && r.exercises[i].setup) ? r.exercises[i].setup : '';
+  box.innerHTML = `<div style="margin-top:6px">
+    <input id="rsetup-input-${i}" value="${cur.replace(/"/g,'&quot;')}" placeholder="e.g. Seat 3 · back pad 2 · handle notch B" onchange="setRoutineSetup(${i}, this.value)" style="width:100%;padding:6px 8px;font-size:12px">
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:3px">🪑 Saved to the routine — shows as a reminder every time you start it.</div>
+  </div>`;
+}
+function setRoutineSetup(i, val) {
+  const r = DB.routines.find(x=>x.id===activeRoutineId); if(!r) return;
+  r.exercises[i].setup = (val||'').trim();
+  save();
+  const disp = document.getElementById('rsetup-display-'+i);
+  if(disp) disp.innerHTML = r.exercises[i].setup ? '🪑 '+r.exercises[i].setup : '';
+  toast('Setup saved ✓');
+}
+
+// ===== PER-EXERCISE SESSION NOTE =====
+function toggleNote(i) {
+  const box = document.getElementById('rnote-'+i);
+  if(!box) return;
+  box.style.display = (box.style.display==='none' || !box.style.display) ? 'block' : 'none';
+  if(box.style.display==='block') { const t=document.getElementById('rlog-note-'+i); if(t) t.focus(); }
+}
 
 function discardRoutineDraft(id) {
   if(!confirm('Discard your in-progress workout and start this routine fresh?')) return;
@@ -6473,10 +6779,15 @@ function logRoutineFromChecklist(id) {
       reps = document.getElementById('rlog-reps-'+i)?.value || ex.reps || '';
       weight = document.getElementById('rlog-weight-'+i)?.value || ex.weight || '';
     }
+    const loggedName = (routineSwaps[i] && routineSwaps[i].name) ? routineSwaps[i].name : ex.name;
+    const sessionNote = (document.getElementById('rlog-note-'+i)?.value || '').trim();
+    const swapNote = routineSwaps[i] ? ` (swapped from ${ex.name})` : '';
+    let notes = 'From routine: '+r.name+noteUnit+swapNote;
+    if(sessionNote) notes += ' · 📝 '+sessionNote;
     const wo = {
-      id:uid(), name:ex.name, cat:ex.cat||'Strength',
+      id:uid(), name:loggedName, cat:ex.cat||'Strength',
       sets, reps, weight, dur, unit,
-      notes:'From routine: '+r.name+noteUnit, date:today()
+      notes, date:today()
     };
     if(setList) wo.setList = setList;
     DB.workouts.unshift(wo);
