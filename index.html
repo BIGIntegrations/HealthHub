@@ -661,6 +661,15 @@
   <!-- ROUTINES TAB -->
   <div id="fittab-routines" class="fittab" style="display:none">
 
+    <!-- Freestyle quick start -->
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <h2 style="margin:0 0 2px">✦ Freestyle Session</h2>
+        <p style="font-family:var(--mono);font-size:10px;color:var(--muted);margin:0">No plan? Search a muscle, add exercises, go.</p>
+      </div>
+      <button class="btn btn-primary" onclick="startFreestyle()">Start</button>
+    </div>
+
     <!-- Today's scheduled routine -->
     <div class="card" id="routine-today-card" style="display:none">
       <div class="card-header" style="margin-bottom:10px">
@@ -889,6 +898,29 @@
   </div>
 </div>
 
+<!-- FREESTYLE SESSION MODAL -->
+<div class="modal-overlay" id="freestyle-modal">
+  <div class="modal" style="max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h2 style="margin:0">✦ Freestyle Session</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeFreestyle()">✕</button>
+    </div>
+    <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:12px">Add whatever you do, as you go. Same check-off + per-set flow.</p>
+    <div style="background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:12px">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:6px">🤖 NOT SURE WHAT TO DO? SEARCH A MUSCLE OR GOAL</div>
+      <div style="display:flex;gap:6px">
+        <input id="freestyle-search" placeholder="e.g. chest, pull day, dumbbell shoulders" onkeydown="if(event.key==='Enter')aiSearchFreestyle()" style="flex:1;padding:8px;font-size:13px">
+        <button class="btn btn-primary btn-sm" onclick="aiSearchFreestyle()">Search</button>
+      </div>
+      <div class="loading" id="freestyle-ai-loading"><div class="spinner"></div> Finding exercises…</div>
+      <div id="freestyle-ai-result" style="margin-top:8px"></div>
+    </div>
+    <div id="freestyle-exercises"></div>
+    <button class="btn btn-ghost" style="width:100%;margin-top:10px" onclick="addFreestyleExercise()">+ Add Exercise</button>
+    <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="logFreestyle()">✓ Log Session</button>
+  </div>
+</div>
+
 <!-- EDIT WORKOUT MODAL -->
 <div class="modal-overlay" id="edit-workout-modal">
   <div class="modal" style="max-height:88vh;overflow-y:auto">
@@ -925,6 +957,46 @@
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn btn-primary" style="flex:1" onclick="saveEditWorkout()">Save Changes</button>
       <button class="btn btn-ghost" onclick="closeEditWorkout()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MED MODAL -->
+<div class="modal-overlay" id="edit-med-modal">
+  <div class="modal" style="max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h2 style="margin:0">Edit Med / Supplement</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeEditMed()">✕</button>
+    </div>
+    <input type="hidden" id="edit-med-id">
+    <div class="input-row"><div><label>Name</label><input id="edit-med-name"></div></div>
+    <div class="input-row ir-2">
+      <div><label>Dose</label><input id="edit-med-dose" placeholder="e.g. 1ml, 500mg, 2 caps"></div>
+      <div><label>Time</label>
+        <select id="edit-med-time">
+          <option>Morning</option><option>Afternoon</option><option>Evening</option><option>Bedtime</option><option>With Food</option><option>As Needed</option>
+        </select>
+      </div>
+    </div>
+    <div class="input-row ir-2">
+      <div><label>Type</label>
+        <select id="edit-med-type">
+          <option value="supplement">Supplement</option>
+          <option value="medication">Medication</option>
+          <option value="vitamin">Vitamin</option>
+          <option value="probiotic">Probiotic</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div><label>Notes</label><input id="edit-med-notes" placeholder="Optional notes..."></div>
+    </div>
+    <div class="input-row"><div>
+      <label>Started On <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">(when you actually began — set earlier to backfill)</span></label>
+      <input type="date" id="edit-med-added">
+    </div></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" style="flex:1" onclick="saveEditMed()">Save Changes</button>
+      <button class="btn btn-ghost" onclick="closeEditMed()">Cancel</button>
     </div>
   </div>
 </div>
@@ -1406,15 +1478,21 @@
     <button class="btn btn-primary" onclick="addMed()">+ Add to Tracker</button>
   </div>
   <div class="card">
-    <div class="card-header">
+    <div class="card-header" style="cursor:pointer" onclick="toggleMedSection('med-grid', this)">
       <h2 style="margin:0">Today — <span id="med-today-date"></span><span id="meds-streak"></span></h2>
-      <button class="btn btn-ghost btn-sm" onclick="resetDayMeds()">Reset Day</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();resetDayMeds()">Reset Day</button>
+        <span class="med-collapse-arrow">▾</span>
+      </div>
     </div>
     <div class="med-grid" id="med-grid"></div>
   </div>
   <div class="card">
-    <h2>All Entries</h2>
-    <div id="med-all-list"></div>
+    <div class="card-header" style="cursor:pointer;margin-bottom:0" onclick="toggleMedSection('med-all-list', this)">
+      <h2 style="margin:0">All Entries</h2>
+      <span class="med-collapse-arrow">▾</span>
+    </div>
+    <div id="med-all-list" style="margin-top:12px"></div>
   </div>
   <div class="card">
     <div class="cal-header">
@@ -1629,7 +1707,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.14.2</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.16.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -3318,6 +3396,43 @@ function deleteMed(id) {
   save(); renderMeds();
 }
 
+function openEditMed(id) {
+  const m = DB.meds.find(x=>x.id===id);
+  if(!m) return;
+  document.getElementById('edit-med-id').value = m.id;
+  document.getElementById('edit-med-name').value = m.name || '';
+  document.getElementById('edit-med-dose').value = m.dose || '';
+  document.getElementById('edit-med-time').value = m.time || 'Morning';
+  document.getElementById('edit-med-type').value = m.type || 'supplement';
+  document.getElementById('edit-med-notes').value = m.notes || '';
+  document.getElementById('edit-med-added').value = m.addedDate || today();
+  document.getElementById('edit-med-modal').classList.add('open');
+}
+function closeEditMed() {
+  document.getElementById('edit-med-modal').classList.remove('open');
+}
+function saveEditMed() {
+  const id = document.getElementById('edit-med-id').value;
+  const m = DB.meds.find(x=>x.id===id);
+  if(!m) return;
+  const name = document.getElementById('edit-med-name').value.trim();
+  if(!name) { toast('Name can\'t be empty'); return; }
+  m.name = name;
+  m.dose = document.getElementById('edit-med-dose').value.trim();
+  m.time = document.getElementById('edit-med-time').value;
+  m.type = document.getElementById('edit-med-type').value;
+  m.notes = document.getElementById('edit-med-notes').value.trim();
+  const newStart = document.getElementById('edit-med-added').value;
+  if(newStart) {
+    if(newStart > today()) { toast('Start date can\'t be in the future'); return; }
+    m.addedDate = newStart;
+  }
+  save();
+  closeEditMed();
+  toast('Updated ✓');
+  renderMeds();
+}
+
 function getMedStreak(medId) {
   let streak = 0, d = new Date();
   for(let i=0;i<365;i++) {
@@ -3340,11 +3455,14 @@ function medCalNext() { medCalDate.setMonth(medCalDate.getMonth()+1); renderMedC
 
 function medDayStatus(dateStr) {
   // returns 'all' | 'partial' | 'missed' | 'none'
-  if(!DB.meds.length) return 'none';
+  // Only meds that already existed on this date count — days before a med was
+  // added (or before tracking started) are 'none' (blank), never 'missed'.
+  const applicable = DB.meds.filter(m => !m.addedDate || m.addedDate <= dateStr);
+  if(!applicable.length) return 'none';
   const log = DB.medLog[dateStr] || {};
-  const takenCount = DB.meds.filter(m => log[m.id]).length;
+  const takenCount = applicable.filter(m => log[m.id]).length;
   if(takenCount === 0) return 'missed';
-  if(takenCount === DB.meds.length) return 'all';
+  if(takenCount === applicable.length) return 'all';
   return 'partial';
 }
 
@@ -3378,13 +3496,15 @@ function renderMedCalendar() {
   }
   grid.innerHTML = cells;
 
-  // monthly summary
+  // monthly summary — only count days that actually had meds to take
   let done=0, total=0;
   for(let day=1; day<=daysInMonth; day++) {
     const ds = `${y}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     if(ds > todayStr) continue;
+    const st = medDayStatus(ds);
+    if(st==='none') continue; // no meds existed yet — don't count
     total++;
-    if(medDayStatus(ds)==='all') done++;
+    if(st==='all') done++;
   }
   const detail = document.getElementById('med-cal-detail');
   if(detail && total) {
@@ -3427,27 +3547,50 @@ function toggleMedOnDate(ds, medId) {
   if(ds === today()) renderMeds(); // keep today's checklist in sync
 }
 
+function toggleMedSection(id, header) {
+  const el = document.getElementById(id);
+  if(!el) return;
+  const hidden = el.style.display === 'none';
+  el.style.display = hidden ? '' : 'none';
+  const arrow = header.querySelector('.med-collapse-arrow');
+  if(arrow) arrow.textContent = hidden ? '▾' : '▸';
+}
+
+let medHistRange = 7; // days shown: 7 / 14 / 30
+function setMedHistRange(n) { medHistRange = parseInt(n); renderMedHistoryList(); }
+
 function renderMedHistoryList() {
   const el = document.getElementById('med-history-list');
   if(!el || !DB.meds.length) { if(el) el.innerHTML=''; return; }
-  // last 14 days (excluding future), most recent first
   const days = [];
   const cur = new Date();
-  for(let i=0;i<14;i++) { days.push(localDate(cur)); cur.setDate(cur.getDate()-1); }
+  for(let i=0;i<medHistRange;i++) { days.push(localDate(cur)); cur.setDate(cur.getDate()-1); }
   const rows = days.map(ds => {
     const st = medDayStatus(ds);
+    if(st==='none') return ''; // no meds existed yet — skip, don't show as missed
     const log = DB.medLog[ds]||{};
-    const n = DB.meds.filter(m=>log[m.id]).length;
+    const applicable = DB.meds.filter(m => !m.addedDate || m.addedDate <= ds);
+    const n = applicable.filter(m=>log[m.id]).length;
     let tag, color;
     if(st==='all'){ tag='✓ all'; color='var(--accent)'; }
-    else if(st==='partial'){ tag=`${n} of ${DB.meds.length}`; color='var(--accent2)'; }
+    else if(st==='partial'){ tag=`${n} of ${applicable.length}`; color='var(--accent2)'; }
     else { tag='✕ missed'; color='var(--danger)'; }
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
       <span style="font-family:var(--mono);font-size:11px;color:var(--text)">${fmt(ds)}${ds===today()?' (today)':''}</span>
       <span style="font-family:var(--mono);font-size:11px;color:${color};font-weight:700">${tag}</span>
     </div>`;
-  }).join('');
-  el.innerHTML = `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Last 14 Days</div>${rows}`;
+  }).filter(Boolean).join('');
+  const label = medHistRange===7?'Last 7 Days':medHistRange===14?'Last 14 Days':'Last 30 Days';
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">History</span>
+      <select onchange="setMedHistRange(this.value)" style="width:auto;padding:4px 8px;font-size:12px">
+        <option value="7" ${medHistRange===7?'selected':''}>Last 7 days</option>
+        <option value="14" ${medHistRange===14?'selected':''}>Last 14 days</option>
+        <option value="30" ${medHistRange===30?'selected':''}>Last 30 days</option>
+      </select>
+    </div>
+    ${rows || '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:6px 0">No tracked days in this range yet</div>'}`;
 }
 
 function renderMeds() {
@@ -3512,8 +3655,12 @@ function renderMeds() {
       <div class="li-body">
         <div class="li-title">${m.name} <span class="tag tag-purple">${m.type}</span></div>
         <div class="li-meta">${m.dose||'—'} · ${m.time} · Added ${fmt(m.addedDate)}</div>
+        ${m.notes?`<div class="li-meta" style="margin-top:2px;color:var(--muted)">📝 ${m.notes}</div>`:''}
       </div>
-      <button class="btn btn-danger btn-sm" onclick="deleteMed('${m.id}')">✕</button>
+      <div style="display:flex;gap:4px">
+        <button class="btn btn-ghost btn-sm" onclick="openEditMed('${m.id}')">✎</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMed('${m.id}')">✕</button>
+      </div>
     </div>`).join('');
 }
 
@@ -5950,11 +6097,59 @@ function renderTodayRoutine() {
           <div class="routine-ex-meta">${ex.cat==='Cardio'?(ex.dur||'?')+' min':(ex.sets||'?')+' × '+(ex.reps||'?')+(ex.weight?' @ '+ex.weight+'lbs':'')}</div>
         </div>
       </div>`).join('')}
-    <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="logEntireRoutine('${r.id}')">✓ Log Entire Workout</button>
+    ${hasRoutineDraft(r.id)?`<div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin-top:10px;text-align:center">⏸ You have a workout in progress — tap Start to resume</div>`:''}
+    <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="openRoutineDetail('${r.id}')">${hasRoutineDraft(r.id)?'▶ Resume Workout':'▶ Start Workout'}</button>
+    <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="startFreestyle()">✦ Freestyle Session Instead</button>
   `;
 }
 
 // ---- Detail / start workout ----
+// ===== ROUTINE DRAFT AUTO-SAVE =====
+// Mid-workout progress survives accidental exit / app purge. Stored separately
+// from logged workouts; cleared once the session is logged or discarded.
+function draftKey(id) { return 'healthhub_routine_draft_' + id; }
+function hasRoutineDraft(id) { try { return !!localStorage.getItem(draftKey(id)); } catch(e){ return false; } }
+function clearRoutineDraft(id) { try { localStorage.removeItem(draftKey(id)); } catch(e){} }
+function loadRoutineDraft(id) {
+  try { const r = localStorage.getItem(draftKey(id)); return r ? JSON.parse(r) : null; } catch(e){ return null; }
+}
+function saveRoutineDraft() {
+  if(!activeRoutineId) return;
+  const exCount = document.querySelectorAll('#routine-detail-exercises .routine-ex-row').length;
+  const state = { ts: Date.now(), checks: {...activeRoutineLog}, perSet: {...routinePerSet}, fields: {}, sets: {} };
+  for(let i=0;i<exCount;i++) {
+    ['sets','reps','weight','secs','dur'].forEach(f=>{
+      const el = document.getElementById(`rlog-${f}-${i}`);
+      if(el) state.fields[`${f}-${i}`] = el.value;
+    });
+    const rows = document.querySelectorAll(`#rset-rows-${i} .rset-row`);
+    if(rows.length) {
+      state.sets[i] = [...rows].map(r=>({ reps: r.querySelector('.set-reps')?.value||'', weight: r.querySelector('.set-weight')?.value||'' }));
+    }
+  }
+  try {
+    localStorage.setItem(draftKey(activeRoutineId), JSON.stringify(state));
+    const ind = document.getElementById('routine-draft-indicator');
+    if(ind) { ind.textContent='✓ progress saved'; ind.style.opacity='1'; clearTimeout(window._draftFade); window._draftFade=setTimeout(()=>{ if(ind) ind.style.opacity='0.4'; },1500); }
+  } catch(e){}
+}
+function restoreRoutineDraft(id) {
+  const d = loadRoutineDraft(id);
+  if(!d) return;
+  activeRoutineLog = d.checks || {};
+  Object.keys(activeRoutineLog).forEach(i=>{
+    const btn = document.getElementById('rchk-'+i);
+    if(btn && activeRoutineLog[i]) { btn.classList.add('done'); btn.textContent='✓'; }
+  });
+  Object.entries(d.fields||{}).forEach(([k,v])=>{ const el=document.getElementById('rlog-'+k); if(el) el.value=v; });
+  Object.keys(d.perSet||{}).forEach(i=>{
+    if(d.perSet[i]) {
+      toggleRoutinePerSet(parseInt(i), 0);
+      const rows = document.getElementById('rset-rows-'+i);
+      if(rows && d.sets[i]) { rows.innerHTML=''; d.sets[i].forEach(s=>addRoutineSetRow(parseInt(i), s.reps, s.weight)); }
+    }
+  });
+}
 let activeRoutineLog = {};
 let activeRoutineId = null;
 function openRoutineDetail(id) {
@@ -5969,7 +6164,7 @@ function openRoutineDetail(id) {
       <h2 style="margin:0">${r.name}${r.location?` <span class="routine-day-badge">${r.location}</span>`:''}</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeRoutineDetail()">✕</button>
     </div>
-    <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px">${r.exercises.length} exercises · check off + punch in your actual weight as you go</p>
+    <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px">${r.exercises.length} exercises · check off + punch in your actual weight as you go <span id="routine-draft-indicator" style="color:var(--accent);opacity:0.4;float:right"></span></p>
     <div id="routine-detail-exercises">
       ${r.exercises.map((ex,i)=>{
         const last = getLastWeight(ex.name);
@@ -5989,15 +6184,15 @@ function openRoutineDetail(id) {
         let logInputs;
         if(unit==='seconds' || unit==='interval') {
           const lbl = unit==='seconds' ? 'sets' : 'rounds';
-          logInputs = `<input type="number" id="rlog-sets-${i}" value="${ex.sets||''}" placeholder="${lbl}" style="width:54px;padding:4px 6px;font-size:11px">
-            <input type="number" id="rlog-secs-${i}" value="${ex.reps||''}" placeholder="sec" style="width:54px;padding:4px 6px;font-size:11px">
+          logInputs = `<input type="number" id="rlog-sets-${i}" value="${ex.sets||''}" placeholder="${lbl}" oninput="onRoutineEdit(${i})" style="width:54px;padding:4px 6px;font-size:11px">
+            <input type="number" id="rlog-secs-${i}" value="${ex.reps||''}" placeholder="sec" oninput="onRoutineEdit(${i})" style="width:54px;padding:4px 6px;font-size:11px">
             <button class="btn btn-ghost btn-sm" onclick="startHoldTimer(${ex.reps||30})" title="Start countdown">▶ ${ex.reps||30}s</button>`;
         } else if(ex.cat==='Cardio') {
-          logInputs = `<input type="number" id="rlog-dur-${i}" value="${ex.dur||''}" placeholder="min" style="width:70px;padding:6px 10px;font-size:16px"><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min</span>`;
+          logInputs = `<input type="number" id="rlog-dur-${i}" value="${ex.dur||''}" placeholder="min" oninput="onRoutineEdit(${i})" style="width:70px;padding:6px 10px;font-size:16px"><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min</span>`;
         } else {
-          logInputs = `<input type="number" id="rlog-sets-${i}" value="${ex.sets||''}" placeholder="sets" style="width:48px;padding:4px 6px;font-size:11px">
-            <input type="number" id="rlog-reps-${i}" value="${ex.reps||''}" placeholder="reps" style="width:48px;padding:4px 6px;font-size:11px">
-            <input type="number" id="rlog-weight-${i}" value="${startW}" placeholder="lbs" style="width:56px;padding:4px 6px;font-size:11px">`;
+          logInputs = `<input type="number" id="rlog-sets-${i}" value="${ex.sets||''}" placeholder="sets" oninput="onRoutineEdit(${i})" style="width:48px;padding:4px 6px;font-size:11px">
+            <input type="number" id="rlog-reps-${i}" value="${ex.reps||''}" placeholder="reps" oninput="onRoutineEdit(${i})" style="width:48px;padding:4px 6px;font-size:11px">
+            <input type="number" id="rlog-weight-${i}" value="${startW}" placeholder="lbs" oninput="onRoutineEdit(${i})" style="width:56px;padding:4px 6px;font-size:11px">`;
         }
         return `
         ${(thisSuper && !prevSuper)?'<div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin:8px 0 2px">🔗 SUPERSET — do back-to-back, rest after</div>':''}
@@ -6024,17 +6219,176 @@ function openRoutineDetail(id) {
       <button class="btn btn-ghost btn-sm" onclick="openRoutineBuilder('${r.id}');closeRoutineDetail()">Edit</button>
       <button class="btn btn-danger btn-sm" onclick="deleteRoutine('${r.id}');closeRoutineDetail()">Delete</button>
     </div>
-    <p style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px;text-align:center">Logs all checked exercises (or all if none checked) with the weights you entered</p>
+    ${hasRoutineDraft(id)?`<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px;color:var(--muted)" onclick="discardRoutineDraft('${r.id}')">↺ Discard in-progress draft & reset</button>`:''}
+    <p style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:8px;text-align:center">Auto-saves as you go — leave and come back anytime. Logs all checked exercises (or all if none checked).</p>
   `;
   document.getElementById('routine-detail-modal').classList.add('open');
+  restoreRoutineDraft(id);
+}
+
+// User edited a set/rep/weight field — auto-check that exercise and save the draft
+function onRoutineEdit(i) {
+  if(!activeRoutineLog[i]) {
+    activeRoutineLog[i] = true;
+    const btn = document.getElementById('rchk-'+i);
+    if(btn) { btn.classList.add('done'); btn.textContent='✓'; }
+  }
+  saveRoutineDraft();
 }
 function closeRoutineDetail() { document.getElementById('routine-detail-modal').classList.remove('open'); activeRoutineId=null; }
+
+function discardRoutineDraft(id) {
+  if(!confirm('Discard your in-progress workout and start this routine fresh?')) return;
+  clearRoutineDraft(id);
+  activeRoutineLog = {};
+  routinePerSet = {};
+  openRoutineDetail(id);
+}
+
+// ===== FREESTYLE SESSION =====
+// A blank, ad-hoc workout using the same checkable/expandable card flow.
+function startFreestyle() {
+  // restore a freestyle draft if one exists
+  const d = loadRoutineDraft('freestyle');
+  freestyleExercises = (d && d.exercises) ? d.exercises : [];
+  if(!freestyleExercises.length) freestyleExercises = [{ name:'', cat:'Strength', sets:'', reps:'', weight:'' }];
+  renderFreestyle();
+  document.getElementById('freestyle-modal').classList.add('open');
+}
+function closeFreestyle() { document.getElementById('freestyle-modal').classList.remove('open'); }
+
+let freestyleExercises = [];
+function captureFreestyle() {
+  const rows = document.querySelectorAll('#freestyle-exercises .fs-ex');
+  freestyleExercises = [...rows].map(r=>({
+    name: r.querySelector('.fs-name')?.value || '',
+    cat: r.querySelector('.fs-cat')?.value || 'Strength',
+    sets: r.querySelector('.fs-sets')?.value || '',
+    reps: r.querySelector('.fs-reps')?.value || '',
+    weight: r.querySelector('.fs-weight')?.value || '',
+    dur: r.querySelector('.fs-dur')?.value || ''
+  }));
+}
+function saveFreestyleDraft() {
+  captureFreestyle();
+  try { localStorage.setItem(draftKey('freestyle'), JSON.stringify({ ts:Date.now(), exercises:freestyleExercises })); } catch(e){}
+}
+function renderFreestyle() {
+  const el = document.getElementById('freestyle-exercises');
+  el.innerHTML = freestyleExercises.map((ex,i)=>{
+    const isCardio = ex.cat==='Cardio';
+    return `<div class="fs-ex" style="background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+        <input class="fs-name" value="${(ex.name||'').replace(/"/g,'&quot;')}" placeholder="Exercise name" oninput="saveFreestyleDraft()" style="flex:1;padding:6px 8px;font-size:13px">
+        <select class="fs-cat" onchange="captureFreestyle();renderFreestyle();saveFreestyleDraft()" style="width:auto;padding:6px;font-size:11px">
+          ${['Strength','Cardio','Other','Flexibility'].map(c=>`<option ${ex.cat===c?'selected':''}>${c}</option>`).join('')}
+        </select>
+        <button class="btn btn-danger btn-sm" onclick="removeFreestyle(${i})">✕</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${isCardio
+          ? `<input class="fs-dur" type="number" value="${ex.dur||''}" placeholder="min" oninput="saveFreestyleDraft()" style="width:70px;padding:4px 6px;font-size:11px"><span style="font-family:var(--mono);font-size:10px;color:var(--muted);align-self:center">min</span>`
+          : `<input class="fs-sets" type="number" value="${ex.sets||''}" placeholder="sets" oninput="saveFreestyleDraft()" style="width:48px;padding:4px 6px;font-size:11px">
+             <input class="fs-reps" type="number" value="${ex.reps||''}" placeholder="reps" oninput="saveFreestyleDraft()" style="width:48px;padding:4px 6px;font-size:11px">
+             <input class="fs-weight" type="number" value="${ex.weight||''}" placeholder="lbs" oninput="saveFreestyleDraft()" style="width:56px;padding:4px 6px;font-size:11px">`}
+        <button class="btn btn-ghost btn-sm" onclick="captureFreestyle();showDemoInline((freestyleExercises[${i}].name||''),'fsdemo-${i}')">▶ Demo</button>
+      </div>
+      <div class="demo-media" id="fsdemo-${i}"></div>
+    </div>`;
+  }).join('');
+}
+function addFreestyleExercise() {
+  captureFreestyle();
+  freestyleExercises.push({ name:'', cat:'Strength', sets:'', reps:'', weight:'' });
+  renderFreestyle();
+  saveFreestyleDraft();
+}
+function removeFreestyle(i) {
+  captureFreestyle();
+  freestyleExercises.splice(i,1);
+  if(!freestyleExercises.length) freestyleExercises=[{name:'',cat:'Strength',sets:'',reps:'',weight:''}];
+  renderFreestyle();
+  saveFreestyleDraft();
+}
+// AI exercise lookup inside freestyle — search a muscle/goal, get options w/ demos, add them
+async function aiSearchFreestyle() {
+  const input = document.getElementById('freestyle-search').value.trim();
+  if(!input) { toast('Type a muscle group or goal'); return; }
+  const key = getAPIKey();
+  if(!key) { toast('Add an API key in ⚙ Settings for AI search'); return; }
+  const loading = document.getElementById('freestyle-ai-loading');
+  const result = document.getElementById('freestyle-ai-result');
+  loading.classList.add('show');
+  result.innerHTML = '';
+  const prompt = `A user at a gym wants exercises for: "${input}".
+Return up to 6 effective exercises. Respond ONLY with valid JSON, no markdown, no code fences:
+[ { "name":"", "cat":"Strength|Cardio|Other", "muscle":"primary muscle", "sets":number, "reps":number, "desc":"short cue under 80 chars" } ]
+Use common gym exercise names. Default to 3 sets x 10 reps if unsure.`;
+  try {
+    const text = await callAI(prompt, 800);
+    const clean = text.replace(/```json|```/g,'').trim();
+    const match = clean.match(/\[[\s\S]*\]/);
+    let list = JSON.parse(match ? match[0] : clean);
+    if(!Array.isArray(list) || !list.length) { result.innerHTML='<div style="font-family:var(--mono);font-size:11px;color:var(--muted)">No results — try different wording</div>'; return; }
+    result.innerHTML = `<div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:6px">Found ${list.length} — ▶ preview or tap + to add to your session</div>` +
+      list.map((m,i)=>`
+      <div style="padding:8px 10px;background:var(--bg2);border:1px solid var(--accent);border-radius:8px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:var(--accent)">${m.name}</div>
+            <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">${m.muscle||''}${m.sets&&m.reps?' · '+m.sets+'×'+m.reps:''}</div>
+            ${m.desc?`<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px">${m.desc}</div>`:''}
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${(m.name||'').replace(/'/g,"")}','fs-ai-demo-${i}')">▶</button>
+            <button class="btn btn-primary btn-sm" onclick='addFreestyleFromAI(${JSON.stringify(m).replace(/'/g,"&#39;")})'>+ Add</button>
+          </div>
+        </div>
+        <div class="demo-media" id="fs-ai-demo-${i}"></div>
+      </div>`).join('');
+  } catch(e) {
+    toast('AI error: ' + e.message);
+  } finally {
+    loading.classList.remove('show');
+  }
+}
+function addFreestyleFromAI(m) {
+  captureFreestyle();
+  // drop a leading blank row if it's the only one and empty
+  if(freestyleExercises.length===1 && !freestyleExercises[0].name.trim()) freestyleExercises = [];
+  freestyleExercises.push({
+    name: m.name||'', cat: m.cat||'Strength',
+    sets: m.sets||'', reps: m.reps||'', weight:'', dur:''
+  });
+  renderFreestyle();
+  saveFreestyleDraft();
+  toast((m.name||'Exercise') + ' added ✓');
+}
+
+function logFreestyle() {
+  captureFreestyle();
+  const valid = freestyleExercises.filter(ex=>ex.name.trim());
+  if(!valid.length) { toast('Add at least one exercise with a name'); return; }
+  valid.forEach(ex=>{
+    DB.workouts.unshift({
+      id:uid(), name:ex.name.trim(), cat:ex.cat,
+      sets:ex.sets, reps:ex.reps, weight:ex.weight, dur:ex.dur||'',
+      notes:'Freestyle session', date:today()
+    });
+  });
+  save();
+  clearRoutineDraft('freestyle');
+  closeFreestyle();
+  toast(`Logged ${valid.length} exercise${valid.length!==1?'s':''} ✓`);
+  renderWorkouts();
+}
 
 function toggleRoutineEx(i) {
   activeRoutineLog[i] = !activeRoutineLog[i];
   const btn = document.getElementById('rchk-'+i);
   if(activeRoutineLog[i]) { btn.classList.add('done'); btn.textContent='✓'; }
   else { btn.classList.remove('done'); btn.textContent='○'; }
+  saveRoutineDraft();
 }
 
 // Log from checklist — uses entered weights, logs checked items (or all if none checked)
@@ -6076,9 +6430,9 @@ function addRoutineSetRow(i, reps, weight) {
   div.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:5px';
   div.innerHTML = `
     <span style="font-family:var(--mono);font-size:10px;color:var(--muted);width:38px;flex:0 0 auto">SET ${rows.children.length+1}</span>
-    <input class="set-reps" type="number" inputmode="numeric" placeholder="reps" min="0" value="${reps??''}" style="flex:1;min-width:0;padding:4px 6px;font-size:11px">
-    <input class="set-weight" type="number" inputmode="decimal" placeholder="lbs" min="0" step="0.5" value="${weight??''}" style="flex:1;min-width:0;padding:4px 6px;font-size:11px">
-    <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.rset-row').remove(); [...document.querySelectorAll('#rset-rows-${i} .rset-row')].forEach((r,k)=>r.querySelector('span').textContent='SET '+(k+1))" style="flex:0 0 auto">✕</button>`;
+    <input class="set-reps" type="number" inputmode="numeric" placeholder="reps" min="0" value="${reps??''}" oninput="if(activeRoutineId)saveRoutineDraft()" style="flex:1;min-width:0;padding:4px 6px;font-size:11px">
+    <input class="set-weight" type="number" inputmode="decimal" placeholder="lbs" min="0" step="0.5" value="${weight??''}" oninput="if(activeRoutineId)saveRoutineDraft()" style="flex:1;min-width:0;padding:4px 6px;font-size:11px">
+    <button type="button" class="btn btn-danger btn-sm" onclick="this.closest('.rset-row').remove(); [...document.querySelectorAll('#rset-rows-${i} .rset-row')].forEach((r,k)=>r.querySelector('span').textContent='SET '+(k+1)); if(activeRoutineId)saveRoutineDraft()" style="flex:0 0 auto">✕</button>`;
   rows.appendChild(div);
 }
 
@@ -6129,6 +6483,7 @@ function logRoutineFromChecklist(id) {
     logged++;
   });
   save();
+  clearRoutineDraft(id);
   toast(`Logged ${logged} exercise${logged!==1?'s':''} from ${r.name} ✓`);
   closeRoutineDetail();
   renderWorkouts();
