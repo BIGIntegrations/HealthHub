@@ -579,7 +579,11 @@
     <button class="btn btn-ghost" onclick="openCardioPhoto()" style="width:100%;margin-bottom:10px;white-space:nowrap">📷 Scan Machine / AllTrails <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">(up to 3)</span></button>
     <input type="file" id="cardio-photo-input" accept="image/*" multiple style="display:none" onchange="handleCardioPhoto(event)">
     <div class="ai-loading" id="cardio-photo-loading"><div class="ai-spinner"></div>Reading the screen...</div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 8px">Or enter manually</div>
+    <div style="display:flex;align-items:center;gap:10px;margin:14px 0 10px">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">Or enter manually</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
     <div class="input-row"><div><label>Machine</label>
       <select id="cardio-machine" onchange="renderCardioFields()">
         <option>Treadmill</option><option>Stair Climber</option><option>Bike</option><option>Elliptical</option><option>Rower</option><option>Hiking</option><option>Outdoor Cycling</option><option>Other Cardio</option>
@@ -1725,7 +1729,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.20.1</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.22.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -2441,12 +2445,17 @@ function buildSessionGroups(items) {
 }
 function renderSessions(range, el) {
   const items = filterItems(DB.workouts, range);
-  if(!items.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No sessions yet. Log a routine to see it here!</div>'; return; }
+  // Full (unfiltered) session list gives STABLE indices for the detail popup and
+  // for heatmap day-taps, regardless of the active date filter.
+  const fullList = buildSessionGroups(DB.workouts);
+  window._sessionList = fullList;
+  const idxByKey = {}; fullList.forEach((g,i)=>{ idxByKey[g.key]=i; });
+  if(!items.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No sessions in this range yet.</div>' + renderWorkoutHeatmap(); return; }
   const list = buildSessionGroups(items);
-  window._sessionList = list;
   const shown = (range==='all'||range==='week'||range==='month') ? (window._workoutShowCount||5) : list.length;
   const visible = list.slice(0, shown);
-  const itemsHtml = visible.map((g,idx)=>{
+  const itemsHtml = visible.map((g)=>{
+    const idx = idxByKey[g.key];
     const vol = g.items.reduce((s,w)=>s+workoutVolume(w),0);
     const cals = g.items.reduce((s,w)=>s+workoutCalories(w).cal,0);
     const icon = g.freestyle ? '⚡' : (g.isRoutine ? '📋' : '🏋️');
@@ -2471,7 +2480,62 @@ function renderSessions(range, el) {
   } else if(shown > 5 && list.length > 5) {
     moreHtml = `<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" style="width:100%" onclick="showMoreWorkouts('reset')">Collapse list</button></div>`;
   }
-  el.innerHTML = itemsHtml + moreHtml;
+  el.innerHTML = itemsHtml + moreHtml + renderWorkoutHeatmap();
+}
+// Month calendar tucked at the end of the Sessions view — shaded by calories burned.
+function renderWorkoutHeatmap() {
+  if(!window._heatMonth) window._heatMonth = new Date();
+  const view = window._heatMonth;
+  const y = view.getFullYear(), mo = view.getMonth();
+  // calories per day across ALL workouts
+  const dayCals = {};
+  DB.workouts.forEach(w => { if(w.date) dayCals[w.date] = (dayCals[w.date]||0) + workoutCalories(w).cal; });
+  // date -> most-recent session index that day (window._sessionList is sorted desc)
+  const dayIdx = {};
+  (window._sessionList||[]).forEach((g,i)=>{ if(dayIdx[g.date]==null) dayIdx[g.date]=i; });
+  const firstDow = new Date(y, mo, 1).getDay();
+  const daysInMonth = new Date(y, mo+1, 0).getDate();
+  const todayStr = today();
+  const monthLabel = new Date(y, mo, 1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const tier = c => !c ? 'var(--bg3)'
+    : c < 150 ? 'color-mix(in srgb, var(--accent) 22%, var(--bg3))'
+    : c < 350 ? 'color-mix(in srgb, var(--accent) 45%, var(--bg3))'
+    : c < 550 ? 'color-mix(in srgb, var(--accent) 70%, var(--bg3))'
+    : 'var(--accent)';
+  const head = ['S','M','T','W','T','F','S'].map(d=>`<div style="text-align:center;font-family:var(--mono);font-size:9px;color:var(--muted)">${d}</div>`).join('');
+  let cells = '';
+  for(let i=0;i<firstDow;i++) cells += '<div class="cal-cell cal-empty"></div>';
+  for(let day=1; day<=daysInMonth; day++){
+    const ds = `${y}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const cals = Math.round(dayCals[ds]||0);
+    const bg = tier(cals);
+    const isToday = ds===todayStr;
+    const hasSession = dayIdx[ds]!=null;
+    const numColor = isToday ? 'var(--accent)' : (cals>=350 ? 'var(--accent-ink)' : 'var(--text)');
+    cells += `<div class="cal-cell ${isToday?'today':''}" style="background:${bg};${hasSession?'':'cursor:default'}" ${hasSession?`onclick="openSessionDetail(${dayIdx[ds]})"`:''} title="${cals?cals+' cal':'rest day'}">
+      <span class="cal-daynum" style="color:${numColor}">${day}</span>
+    </div>`;
+  }
+  const swatch = bg => `<span style="width:11px;height:11px;border-radius:3px;background:${bg};display:inline-block"></span>`;
+  return `
+    <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <button class="cal-nav-btn" onclick="heatMonthShift(-1)">‹</button>
+        <div style="font-family:var(--sans);font-weight:600;font-size:13px">${monthLabel}</div>
+        <button class="cal-nav-btn" onclick="heatMonthShift(1)">›</button>
+      </div>
+      <div class="cal-grid">${head}</div>
+      <div class="cal-grid" style="margin-top:4px">${cells}</div>
+      <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;margin-top:10px;font-family:var(--mono);font-size:9px;color:var(--muted)">
+        less ${swatch('var(--bg3)')} ${swatch('color-mix(in srgb, var(--accent) 22%, var(--bg3))')} ${swatch('color-mix(in srgb, var(--accent) 45%, var(--bg3))')} ${swatch('color-mix(in srgb, var(--accent) 70%, var(--bg3))')} ${swatch('var(--accent)')} more
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-align:center;margin-top:6px">Shaded by calories burned · tap an active day to open it</div>
+    </div>`;
+}
+function heatMonthShift(delta) {
+  if(!window._heatMonth) window._heatMonth = new Date();
+  window._heatMonth = new Date(window._heatMonth.getFullYear(), window._heatMonth.getMonth()+delta, 1);
+  renderWorkouts();
 }
 function openSessionDetail(idx) {
   const g = (window._sessionList||[])[idx];
@@ -6477,6 +6541,7 @@ function restoreRoutineDraft(id) {
     if(t.value && t.value.trim()) {
       const i = t.id.replace('rlog-note-','');
       const box = document.getElementById('rnote-'+i); if(box) box.style.display='block';
+      const more = document.getElementById('rmore-'+i); if(more) more.style.display='flex';
       const btn = document.getElementById('rnotebtn-'+i); if(btn) btn.textContent='📝 Note ✓';
     }
   });
@@ -6555,11 +6620,14 @@ function openRoutineDetail(id) {
             <div id="rlog-perset-${i}" style="display:none;margin-top:6px"></div>
             <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
               <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${nameJs}','rdemo-${i}')">▶ Demo</button>
+              ${(ex.cat!=='Cardio' && unit!=='seconds' && unit!=='interval') ? `<button class="btn btn-ghost btn-sm" id="rlog-perset-btn-${i}" onclick="toggleRoutinePerSet(${i}, ${parseInt(ex.sets)||3})">⚙ Per Set</button>` : ''}
+              <button class="btn btn-ghost btn-sm" id="rmorebtn-${i}" onclick="toggleMore(${i})">⋯ More</button>
+            </div>
+            <div id="rmore-${i}" style="display:none;gap:6px;margin-top:6px;flex-wrap:wrap">
               <button class="btn btn-ghost btn-sm" onclick="toggleMuscleMap('${nameJs}','${muscJs}','rmuscle-${i}')">🎯 Muscles</button>
               ${ex.cat!=='Cardio' ? `<button class="btn btn-ghost btn-sm" onclick="toggleSwap(${i})">⇄ Swap</button>` : ''}
               <button class="btn btn-ghost btn-sm" onclick="toggleSetup(${i})">🪑 Setup</button>
               <button class="btn btn-ghost btn-sm" id="rnotebtn-${i}" onclick="toggleNote(${i})">📝 Note</button>
-              ${(ex.cat!=='Cardio' && unit!=='seconds' && unit!=='interval') ? `<button class="btn btn-ghost btn-sm" id="rlog-perset-btn-${i}" onclick="toggleRoutinePerSet(${i}, ${parseInt(ex.sets)||3})">⚙ Per Set</button>` : ''}
             </div>
             <div id="rmuscle-${i}"></div>
             <div id="rswap-${i}"></div>
@@ -6593,7 +6661,25 @@ function onRoutineEdit(i) {
   }
   saveRoutineDraft();
 }
-function closeRoutineDetail() { document.getElementById('routine-detail-modal').classList.remove('open'); activeRoutineId=null; }
+function closeRoutineDetail() {
+  if(activeRoutineId) saveRoutineDraft(); // persist checks/weights/swaps/notes before closing
+  document.getElementById('routine-detail-modal').classList.remove('open');
+  activeRoutineId=null;
+}
+// Tap the dark backdrop to dismiss a modal. The builder + freestyle modals are
+// excluded so an accidental tap can't wipe a half-built routine.
+function initModalBackdrops() {
+  const NO_BACKDROP = ['routine-modal','freestyle-modal'];
+  document.querySelectorAll('.modal-overlay').forEach(ov => {
+    if(NO_BACKDROP.includes(ov.id)) return;
+    ov.addEventListener('click', e => {
+      if(e.target !== ov) return; // only when the backdrop itself is tapped, not its contents
+      if(ov.id==='routine-detail-modal') closeRoutineDetail();   // saves the draft first
+      else if(ov.id==='session-detail-modal') closeSessionDetail();
+      else ov.classList.remove('open');
+    });
+  });
+}
 
 // ===== EXERCISE SWAP (temporary for today, or permanent in the routine) =====
 let routineSwaps = {}; // { exerciseIndex: { name, muscles } } — session-only overrides
@@ -6720,6 +6806,11 @@ function toggleNote(i) {
   if(!box) return;
   box.style.display = (box.style.display==='none' || !box.style.display) ? 'block' : 'none';
   if(box.style.display==='block') { const t=document.getElementById('rlog-note-'+i); if(t) t.focus(); }
+}
+function toggleMore(i) {
+  const box = document.getElementById('rmore-'+i);
+  if(!box) return;
+  box.style.display = (box.style.display==='none' || !box.style.display) ? 'flex' : 'none';
 }
 
 function discardRoutineDraft(id) {
@@ -7232,6 +7323,7 @@ function analyzeQRWithAI() {
 // ===== INIT =====
 load();
 applyTheme();
+initModalBackdrops();
 document.getElementById('tx-date').value = today();
 // Set default dates on debt forms
 ['adv-repay-date','arr-first-date','bnpl-start-date','gray-date'].forEach(id => {
