@@ -1729,7 +1729,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.23.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.25.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -5114,15 +5114,23 @@ async function callAIWithImage(prompt, imageBase64, maxTokens) {
     const key = localStorage.getItem('healthhub_apikey_'+prov);
     if(!key) continue; // no key for this provider, skip
     triedAny = true;
-    try {
-      const txt = await callOneProvider(prov, key, prompt, imageBase64, maxTokens);
-      if(txt) {
-        if(prov !== active) toast('Used '+(AI_PROVIDERS[prov]?.label||prov)+' (fallback)');
-        return txt;
+    // Retry once on transient overload/rate errors before giving up on this provider.
+    // (Gemini's "high demand" 503s are usually momentary, and for photos Gemini may be
+    // the only option, so a quick retry beats failing outright.)
+    for(let attempt=0; attempt<2; attempt++) {
+      try {
+        const txt = await callOneProvider(prov, key, prompt, imageBase64, maxTokens);
+        if(txt) {
+          if(prov !== active) toast('Used '+(AI_PROVIDERS[prov]?.label||prov)+' (fallback)');
+          return txt;
+        }
+        break; // empty response — don't retry, move to next provider
+      } catch(e) {
+        lastErr = e;
+        const transient = /high demand|overload|rate.?limit|try again|timeout|temporarily|503|429|response is null/i.test(e.message||'');
+        if(transient && attempt===0) { await new Promise(r=>setTimeout(r, 1400)); continue; } // wait and retry once
+        break; // non-transient or already retried — move to next provider
       }
-    } catch(e) {
-      lastErr = e;
-      // continue to next provider on quota/rate/key errors
     }
   }
   if(!triedAny) throw new Error(hasImages ? 'Add a Gemini key in Settings for photos' : 'No API key — add one in Settings');
@@ -5400,6 +5408,13 @@ function getEquipCategories() {
   return ['All', ...new Set(PF_EQUIPMENT.map(e => e.cat))];
 }
 
+// Word-by-word search: every word in the query must appear somewhere in the text,
+// in any order, ignoring hyphens. So "assisted machine pull up" finds "Assisted Pull-Up Machine".
+function tokenMatch(haystack, query) {
+  const norm = s => (s||'').toLowerCase().replace(/[-_/]/g,' ').replace(/\s+/g,' ');
+  const hay = norm(haystack);
+  return norm(query).split(' ').filter(Boolean).every(t => hay.includes(t));
+}
 function renderEquipment() {
   const search = (document.getElementById('equip-search')?.value || '').toLowerCase();
   const catsEl = document.getElementById('equip-cats');
@@ -5417,11 +5432,7 @@ function renderEquipment() {
   // Filter
   let items = PF_EQUIPMENT;
   if(currentEquipCat !== 'All') items = items.filter(e => e.cat === currentEquipCat);
-  if(search) items = items.filter(e =>
-    e.name.toLowerCase().includes(search) ||
-    e.muscles.toLowerCase().includes(search) ||
-    e.cat.toLowerCase().includes(search)
-  );
+  if(search) items = items.filter(e => tokenMatch(e.name+' '+e.muscles+' '+e.cat, search));
 
   if(countEl) countEl.textContent = PF_EQUIPMENT.length + ' items';
 
@@ -7190,7 +7201,7 @@ User's recent history: ${recent || 'none yet'}.${excludeText}
 
 Respond ONLY with valid JSON, no markdown, no code fences:
 {
-  "top": { "name":"", "category":"Strength|Cardio|Flexibility|HIIT|Sports|Other", "sets":number, "reps":number, "weight":number_or_0, "duration":number_or_0, "tip":"under 100 chars", "description":"one sentence", "muscles":"primary muscles worked, comma-separated", "form":["2-4 short form cues, each under 70 chars"], "mistake":"the single most common mistake, under 80 chars" },
+  "top": { "name":"", "category":"Strength|Cardio|Flexibility|HIIT|Sports|Other", "sets":number, "reps":number, "weight":number_or_0, "duration":number_or_0, "tip":"under 100 chars", "description":"one sentence" },
   "alternatives": [ { "name":"", "category":"", "sets":number, "reps":number, "weight":number_or_0, "duration":number_or_0, "tip":"" } ]
 }`;
 
@@ -7236,26 +7247,50 @@ function renderAiPrimary() {
   if(demoBtn) {
     const nm = (aiSuggestion.name||'').replace(/'/g,"").replace(/"/g,'');
     const muscJs = (aiSuggestion.muscles||'').replace(/'/g,"").replace(/"/g,'');
-    const form = Array.isArray(aiSuggestion.form) ? aiSuggestion.form.filter(Boolean) : [];
-    const hasBreakdown = !!(aiSuggestion.muscles || form.length || aiSuggestion.mistake);
-    let breakdownHtml = '';
-    if(aiSuggestion.muscles) breakdownHtml += `<div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:6px">🎯 Targets: ${aiSuggestion.muscles}</div>`;
-    if(form.length) breakdownHtml += `<div style="font-size:12px;font-weight:600;margin-bottom:3px">Form cues</div><ul style="margin:0 0 8px 16px;padding:0;font-size:12px;color:var(--text);line-height:1.5">${form.map(f=>`<li>${f}</li>`).join('')}</ul>`;
-    if(aiSuggestion.mistake) breakdownHtml += `<div style="font-size:12px;color:var(--accent2)">⚠ Common mistake: ${aiSuggestion.mistake}</div>`;
     demoBtn.innerHTML = `
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${nm}','ai-demo-media')">▶ Demo</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleMuscleMap('${nm}','${muscJs}','ai-muscle-box')">🎯 Muscles</button>
-        ${hasBreakdown?`<button class="btn btn-ghost btn-sm" onclick="toggleAiBreakdown()">📋 Breakdown</button>`:''}
+        <button class="btn btn-ghost btn-sm" onclick="toggleAiBreakdown()">📋 Breakdown</button>
       </div>
-      <div id="ai-breakdown-box" style="display:none;margin-top:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px">${breakdownHtml}</div>
+      <div id="ai-breakdown-box" style="display:none;margin-top:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px"></div>
       <div id="ai-muscle-box"></div>
       <div class="demo-media" id="ai-demo-media"></div>`;
   }
 }
-function toggleAiBreakdown() {
+// Shared lazy fetch for an exercise's coaching breakdown (one small, fast call, cached by caller)
+async function fetchExerciseBreakdown(name) {
+  const prompt = `For the gym exercise "${name}", respond ONLY with valid JSON, no markdown, no code fences:
+{ "muscles":"primary muscles worked, comma-separated", "form":["2-4 short form cues, each under 70 chars"], "mistake":"the single most common mistake, under 80 chars" }`;
+  const text = await callAI(prompt, 400);
+  const clean = text.replace(/```json|```/g,'').trim();
+  const m = clean.match(/\{[\s\S]*\}/);
+  const data = JSON.parse(m ? m[0] : clean);
+  return { muscles:data.muscles||'', form:Array.isArray(data.form)?data.form.filter(Boolean):[], mistake:data.mistake||'' };
+}
+function breakdownInner(b) {
+  const form = Array.isArray(b.form) ? b.form.filter(Boolean) : [];
+  let h = '';
+  if(b.muscles) h += `<div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:6px">🎯 Targets: ${b.muscles}</div>`;
+  if(form.length) h += `<div style="font-size:12px;font-weight:600;margin-bottom:3px">Form cues</div><ul style="margin:0 0 8px 16px;padding:0;font-size:12px;color:var(--text);line-height:1.5">${form.map(f=>`<li>${f}</li>`).join('')}</ul>`;
+  if(b.mistake) h += `<div style="font-size:12px;color:var(--accent2)">⚠ Common mistake: ${b.mistake}</div>`;
+  return h || '<div style="font-family:var(--mono);font-size:10px;color:var(--muted)">No breakdown available</div>';
+}
+async function toggleAiBreakdown() {
   const box = document.getElementById('ai-breakdown-box');
-  if(box) box.style.display = (box.style.display==='none'||!box.style.display) ? 'block' : 'none';
+  if(!box || !aiSuggestion) return;
+  if(box.dataset.open === '1') { box.style.display='none'; box.dataset.open='0'; return; }
+  if(aiSuggestion._breakdown) { box.innerHTML = breakdownInner(aiSuggestion._breakdown); box.style.display='block'; box.dataset.open='1'; return; }
+  const key = getAPIKey(); if(!key) { toast('Add an API key in ⚙ Settings first'); return; }
+  box.style.display='block'; box.dataset.open='1';
+  box.innerHTML = `<div class="ai-loading show" style="padding:6px 0"><div class="ai-spinner"></div>Loading breakdown…</div>`;
+  try {
+    aiSuggestion._breakdown = await fetchExerciseBreakdown(aiSuggestion.name);
+    if(box.dataset.open === '1') box.innerHTML = breakdownInner(aiSuggestion._breakdown);
+  } catch(e) {
+    box.innerHTML = `<div style="font-family:var(--mono);font-size:10px;color:var(--accent2)">Couldn't load — tap Breakdown again</div>`;
+    box.dataset.open='0'; toast('AI error: '+e.message);
+  }
 }
 
 function renderAiAlternatives() {
@@ -7263,27 +7298,58 @@ function renderAiAlternatives() {
   if(!el) return;
   if(!aiAltList.length) { el.innerHTML = ''; return; }
   el.innerHTML = `
-    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Other Options</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Other Options · tap for details</div>
     ${aiAltList.map((a,i)=>`
       <div style="padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:600">${a.name}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="flex:1;min-width:0;cursor:pointer" onclick="toggleAiAltExpand(${i})">
+            <div style="font-size:13px;font-weight:600">${a.name} <span id="ai-alt-caret-${i}" style="color:var(--muted);font-size:11px">⌄</span></div>
             <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">${a.category==='Cardio'?(a.duration||'?')+' min':(a.sets||'?')+'×'+(a.reps||'?')+(a.weight?' @ '+a.weight+'lbs':'')}${a.tip?' · 💡 '+a.tip:''}</div>
           </div>
-          <div style="display:flex;gap:4px">
+          <div style="display:flex;gap:4px;flex-shrink:0">
             <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${(a.name||'').replace(/'/g,"")}','ai-alt-demo-${i}')" title="Watch demo">▶</button>
             <button class="btn btn-primary btn-sm" onclick="useAiAlt(${i})">Use</button>
           </div>
         </div>
         <div class="demo-media" id="ai-alt-demo-${i}"></div>
+        <div id="ai-alt-expand-${i}" style="display:none"></div>
       </div>`).join('')}
     <button class="btn btn-ghost btn-sm" style="width:100%" onclick="askAI(undefined,true)">↓ Load More Options</button>`;
+}
+function updateAltCaret(i, open) { const c=document.getElementById('ai-alt-caret-'+i); if(c) c.textContent = open ? '⌃' : '⌄'; }
+function altBreakdownHtml(alt, i) {
+  const b = alt._breakdown || {};
+  const nm = (alt.name||'').replace(/'/g,"").replace(/"/g,'');
+  const muscJs = (b.muscles||'').replace(/'/g,"").replace(/"/g,'');
+  return `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${breakdownInner(b)}
+    <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="toggleMuscleMap('${nm}','${muscJs}','ai-alt-muscle-${i}')">🎯 Muscles</button>
+    <div id="ai-alt-muscle-${i}"></div></div>`;
+}
+async function toggleAiAltExpand(i) {
+  const box = document.getElementById('ai-alt-expand-'+i);
+  const alt = aiAltList[i];
+  if(!box || !alt) return;
+  if(box.dataset.open === '1') { box.style.display='none'; box.dataset.open='0'; updateAltCaret(i,false); return; }
+  if(alt._breakdown) { box.innerHTML = altBreakdownHtml(alt,i); box.style.display='block'; box.dataset.open='1'; updateAltCaret(i,true); return; }
+  const key = getAPIKey();
+  if(!key) { toast('Add an API key in ⚙ Settings first'); return; }
+  box.style.display='block'; box.dataset.open='1'; updateAltCaret(i,true);
+  box.innerHTML = `<div class="ai-loading show" style="padding:8px 0"><div class="ai-spinner"></div>Loading breakdown…</div>`;
+  try {
+    alt._breakdown = await fetchExerciseBreakdown(alt.name);
+    if(box.dataset.open === '1') box.innerHTML = altBreakdownHtml(alt,i);
+  } catch(e) {
+    box.innerHTML = `<div style="font-family:var(--mono);font-size:10px;color:var(--accent2);padding:4px 0">Couldn't load — tap the name again to retry</div>`;
+    box.dataset.open='0'; updateAltCaret(i,false);
+    toast('AI error: '+e.message);
+  }
 }
 
 function useAiAlt(i) {
   const a = aiAltList[i];
   if(!a) return;
+  // If we already fetched this alt's breakdown, carry it up to the primary view
+  if(a._breakdown) { a.muscles = a.muscles || a._breakdown.muscles; a.form = a.form || a._breakdown.form; a.mistake = a.mistake || a._breakdown.mistake; }
   // Promote this alternative to the primary pick, fill the form
   aiSuggestion = a;
   renderAiPrimary();
