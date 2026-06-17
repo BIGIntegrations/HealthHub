@@ -1729,7 +1729,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.22.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.22.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -2394,7 +2394,7 @@ function renderWorkouts() {
     const metaLine = [stats, fmt(w.date)].filter(Boolean).join(' · ');
     return `
     <div class="list-item">
-      <div class="li-icon" style="background:var(--bg3)">🏋️</div>
+      <div class="li-icon" style="background:var(--bg3)">${w.cat==='Cardio'?'🏃':'🏋️'}</div>
       <div class="li-body">
         <div class="li-title">${w.name} <span class="tag tag-${catColors[w.cat]||'blue'}">${w.cat}</span></div>
         <div class="li-meta">${metaLine}</div>
@@ -2488,11 +2488,8 @@ function renderWorkoutHeatmap() {
   const view = window._heatMonth;
   const y = view.getFullYear(), mo = view.getMonth();
   // calories per day across ALL workouts
-  const dayCals = {};
-  DB.workouts.forEach(w => { if(w.date) dayCals[w.date] = (dayCals[w.date]||0) + workoutCalories(w).cal; });
-  // date -> most-recent session index that day (window._sessionList is sorted desc)
-  const dayIdx = {};
-  (window._sessionList||[]).forEach((g,i)=>{ if(dayIdx[g.date]==null) dayIdx[g.date]=i; });
+  const dayCals = {}, dayHas = {};
+  DB.workouts.forEach(w => { if(w.date){ dayCals[w.date] = (dayCals[w.date]||0) + workoutCalories(w).cal; dayHas[w.date] = true; } });
   const firstDow = new Date(y, mo, 1).getDay();
   const daysInMonth = new Date(y, mo+1, 0).getDate();
   const todayStr = today();
@@ -2510,9 +2507,9 @@ function renderWorkoutHeatmap() {
     const cals = Math.round(dayCals[ds]||0);
     const bg = tier(cals);
     const isToday = ds===todayStr;
-    const hasSession = dayIdx[ds]!=null;
+    const has = !!dayHas[ds];
     const numColor = isToday ? 'var(--accent)' : (cals>=350 ? 'var(--accent-ink)' : 'var(--text)');
-    cells += `<div class="cal-cell ${isToday?'today':''}" style="background:${bg};${hasSession?'':'cursor:default'}" ${hasSession?`onclick="openSessionDetail(${dayIdx[ds]})"`:''} title="${cals?cals+' cal':'rest day'}">
+    cells += `<div class="cal-cell ${isToday?'today':''}" style="background:${bg};${has?'':'cursor:default'}" ${has?`onclick="openDayDetail('${ds}')"`:''} title="${cals?cals+' cal':'rest day'}">
       <span class="cal-daynum" style="color:${numColor}">${day}</span>
     </div>`;
   }
@@ -2542,25 +2539,7 @@ function openSessionDetail(idx) {
   if(!g) return;
   const vol = g.items.reduce((s,w)=>s+workoutVolume(w),0);
   const cals = g.items.reduce((s,w)=>s+workoutCalories(w).cal,0);
-  const rows = g.items.map(w=>{
-    const c = workoutCalories(w);
-    const stats = (Array.isArray(w.setList) && w.setList.length)
-      ? w.setList.map((s,k)=>`Set ${k+1}: ${s.reps||'?'}×${s.weight||'0'}lb`).join(' · ')
-      : [w.sets&&w.sets+' sets', w.reps&&w.reps+' reps', w.weight&&w.weight+' lbs', fmtDur(w)].filter(Boolean).join(' · ');
-    const swapped = /\(swapped from ([^)]+)\)/.exec(w.notes||'');
-    const cleanNote = (w.notes||'').replace(/^From routine:[^·]*/,'').replace(/\(swapped from[^)]*\)/,'').replace(/^\s*·\s*/,'').replace(/^\s*\([^)]*\)\s*/,'').replace(/^Freestyle session$/,'').trim();
-    return `
-    <div class="list-item">
-      <div class="li-icon" style="background:var(--bg3)">${w.cat==='Cardio'?'🏃':'🏋️'}</div>
-      <div class="li-body">
-        <div class="li-title">${w.name} ${swapped?'<span class="tag tag-orange" style="font-size:9px">swapped</span>':''}</div>
-        <div class="li-meta">${stats||'—'}</div>
-        <div class="li-meta" style="margin-top:2px;color:var(--accent3)">${c.real?'⌚ ':'~'}${c.cal} cal</div>
-        ${swapped?`<div class="li-meta" style="margin-top:2px;color:var(--muted)">↔ swapped from ${swapped[1]}</div>`:''}
-        ${cleanNote?`<div class="li-meta" style="margin-top:2px;color:var(--text)">📝 ${cleanNote}</div>`:''}
-      </div>
-    </div>`;
-  }).join('');
+  const rows = g.items.map(w=>sessionRowHtml(w,false)).join('');
   const routineLive = g.routineId && DB.routines.some(r=>r.id===g.routineId);
   document.getElementById('session-detail-content').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
@@ -2574,6 +2553,57 @@ function openSessionDetail(idx) {
   document.getElementById('session-detail-modal').classList.add('open');
 }
 function closeSessionDetail() { document.getElementById('session-detail-modal').classList.remove('open'); }
+
+// One workout row, shared by the session popup and the day popup.
+function sessionRowHtml(w, showSource) {
+  const c = workoutCalories(w);
+  const stats = (Array.isArray(w.setList) && w.setList.length)
+    ? w.setList.map((s,k)=>`Set ${k+1}: ${s.reps||'?'}×${s.weight||'0'}lb`).join(' · ')
+    : [w.sets&&w.sets+' sets', w.reps&&w.reps+' reps', w.weight&&w.weight+' lbs', fmtDur(w)].filter(Boolean).join(' · ');
+  const swapped = /\(swapped from ([^)]+)\)/.exec(w.notes||'');
+  const cleanNote = (w.notes||'').replace(/^From routine:[^·]*/,'').replace(/\(swapped from[^)]*\)/,'').replace(/^\s*·\s*/,'').replace(/^\s*\([^)]*\)\s*/,'').replace(/^Freestyle session$/,'').trim();
+  const source = w.routineName || (w.freestyle ? 'Freestyle' : 'Individual');
+  return `
+    <div class="list-item">
+      <div class="li-icon" style="background:var(--bg3)">${w.cat==='Cardio'?'🏃':'🏋️'}</div>
+      <div class="li-body">
+        <div class="li-title">${w.name} ${swapped?'<span class="tag tag-orange" style="font-size:9px">swapped</span>':''}</div>
+        <div class="li-meta">${stats||'—'}</div>
+        <div class="li-meta" style="margin-top:2px;color:var(--accent3)">${c.real?'⌚ ':'~'}${c.cal} cal</div>
+        ${showSource?`<div class="li-meta" style="margin-top:2px;color:var(--muted)">${(w.cat==='Cardio'&&!w.routineName)?'🏃 Cardio':'📋 '+source}</div>`:''}
+        ${swapped?`<div class="li-meta" style="margin-top:2px;color:var(--muted)">↔ swapped from ${swapped[1]}</div>`:''}
+        ${cleanNote?`<div class="li-meta" style="margin-top:2px;color:var(--text)">📝 ${cleanNote}</div>`:''}
+      </div>
+    </div>`;
+}
+
+// Tapping a calendar day shows EVERYTHING from that date — all sessions, grouped.
+function openDayDetail(dateStr) {
+  const items = DB.workouts.filter(w => w.date === dateStr);
+  if(!items.length) return;
+  const vol = items.reduce((s,w)=>s+workoutVolume(w),0);
+  const cals = items.reduce((s,w)=>s+workoutCalories(w).cal,0);
+  const groups = buildSessionGroups(items);
+  let body;
+  if(groups.length > 1) {
+    body = groups.map(g=>{
+      const gc = g.items.reduce((s,w)=>s+workoutCalories(w).cal,0);
+      const icon = g.freestyle ? '⚡' : (g.isRoutine ? '📋' : '🏋️');
+      return `<div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin:14px 0 4px">${icon} ${g.name} ${g.modified?'<span class="tag tag-orange" style="font-size:9px">Modified</span>':''} · ${g.items.length} ex · ${gc.toLocaleString()} cal</div>`
+        + g.items.map(w=>sessionRowHtml(w,false)).join('');
+    }).join('');
+  } else {
+    body = items.map(w=>sessionRowHtml(w,true)).join('');
+  }
+  document.getElementById('session-detail-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+      <h2 style="margin:0">${fmt(dateStr)}</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeSessionDetail()">✕</button>
+    </div>
+    <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px">${items.length} exercise${items.length!==1?'s':''} · ${cals.toLocaleString()} cal${vol?' · '+vol.toLocaleString()+' lbs volume':''}${groups.length>1?' · '+groups.length+' sessions':''}</p>
+    ${body}`;
+  document.getElementById('session-detail-modal').classList.add('open');
+}
 
 function showMoreWorkouts(n) {
   if(n==='all') window._workoutShowCount = 99999;
