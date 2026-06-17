@@ -575,17 +575,18 @@
       </div>
     </div>
     <div class="collapse-body">
-    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px">Finished on a treadmill/stair climber? Snap the summary screen to auto-read it, or just type the numbers. Both log a cardio workout.</p>
-    <button class="btn btn-ghost" onclick="openCardioPhoto()" style="width:100%;margin-bottom:10px">📷 Snap or Upload Machine Screen <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">(up to 3)</span></button>
+    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:12px">Finished on a machine or out on a trail? Snap the summary screen — a gym cardio machine <b>or an AllTrails activity screen</b> — to auto-read it, or just type the numbers.</p>
+    <button class="btn btn-ghost" onclick="openCardioPhoto()" style="width:100%;margin-bottom:10px;white-space:nowrap">📷 Scan Machine / AllTrails <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">(up to 3)</span></button>
     <input type="file" id="cardio-photo-input" accept="image/*" multiple style="display:none" onchange="handleCardioPhoto(event)">
     <div class="ai-loading" id="cardio-photo-loading"><div class="ai-spinner"></div>Reading the screen...</div>
     <div style="font-family:var(--mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 8px">Or enter manually</div>
     <div class="input-row"><div><label>Machine</label>
       <select id="cardio-machine" onchange="renderCardioFields()">
-        <option>Treadmill</option><option>Stair Climber</option><option>Bike</option><option>Elliptical</option><option>Rower</option><option>Other Cardio</option>
+        <option>Treadmill</option><option>Stair Climber</option><option>Bike</option><option>Elliptical</option><option>Rower</option><option>Hiking</option><option>Outdoor Cycling</option><option>Other Cardio</option>
       </select>
     </div></div>
     <div id="cardio-fields"></div>
+    <div class="input-row"><div><label>Note <span style="color:var(--muted);font-weight:400">(trail name, route, how it felt…)</span></label><input id="cardio-note" placeholder="optional"></div></div>
     <div class="input-row"><div><label>Date</label><input id="cardio-date" type="date"></div></div>
     <button class="btn btn-primary" onclick="logCardioManual()" style="width:100%;margin-top:4px">+ Log Cardio</button>
     <div id="cardio-photo-result"></div>
@@ -627,6 +628,10 @@
           <option value="month">This Month</option>
         </select>
       </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      <button id="logview-ex" class="btn btn-primary btn-sm" style="flex:1" onclick="setLogView('exercises')">Exercises</button>
+      <button id="logview-se" class="btn btn-ghost btn-sm" style="flex:1" onclick="setLogView('sessions')">📋 Sessions</button>
     </div>
     <div id="workout-list"></div>
   </div>
@@ -895,6 +900,13 @@
 <div class="modal-overlay" id="routine-detail-modal">
   <div class="modal" style="max-height:88vh;overflow-y:auto">
     <div id="routine-detail-content"></div>
+  </div>
+</div>
+
+<!-- SESSION DETAIL MODAL -->
+<div class="modal-overlay" id="session-detail-modal">
+  <div class="modal" style="max-height:88vh;overflow-y:auto">
+    <div id="session-detail-content"></div>
   </div>
 </div>
 
@@ -1713,7 +1725,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.17.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.20.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -2082,6 +2094,21 @@ const CARDIO_FIELDS = {
     {id:'cals',label:'⌚ Calories',ph:'opt'},
     {id:'hr',label:'Avg HR',ph:'opt'}
   ],
+  'Hiking': [
+    {id:'dur',label:'Total time (min)',ph:'e.g. 75'},
+    {id:'dist',label:'Distance (mi)',step:'0.01',ph:'opt'},
+    {id:'elev',label:'Elev. gain (ft)',ph:'opt'},
+    {id:'cals',label:'Calories',ph:'opt'},
+    {id:'hr',label:'Avg HR',ph:'opt'}
+  ],
+  'Outdoor Cycling': [
+    {id:'dur',label:'Total time (min)',ph:'e.g. 60'},
+    {id:'dist',label:'Distance (mi)',step:'0.01',ph:'opt'},
+    {id:'elev',label:'Elev. gain (ft)',ph:'opt'},
+    {id:'speed',label:'Avg Speed (mph)',step:'0.1',ph:'opt'},
+    {id:'cals',label:'Calories',ph:'opt'},
+    {id:'hr',label:'Avg HR',ph:'opt'}
+  ],
   'Other Cardio': [
     {id:'dur',label:'Duration (min)',ph:'e.g. 20'},
     {id:'dist',label:'Distance (mi)',step:'0.01',ph:'opt'},
@@ -2127,21 +2154,24 @@ function logCardioManual() {
     if(f.id==='dur'||f.id==='cals') return;
     const v = getCardioVal(f.id);
     if(v) {
-      const unit = f.id==='dist'?' mi':f.id==='speed'?' mph':f.id==='incline'?'% incline':f.id==='meters'?'m':f.id==='split'?'/500m':f.id==='floors'?' floors':f.id==='steps'?' steps':f.id==='watts'?'W':f.id==='level'?'':'';
+      const unit = f.id==='dist'?' mi':f.id==='speed'?' mph':f.id==='incline'?'% incline':f.id==='meters'?'m':f.id==='split'?'/500m':f.id==='floors'?' floors':f.id==='steps'?' steps':f.id==='watts'?'W':f.id==='elev'?' ft gain':f.id==='level'?'':'';
       const lbl = f.id==='hr'?'avg HR ':f.id==='level'?'level ':'';
       noteParts.push(lbl + v + unit);
     }
   });
+  const freeNote = (document.getElementById('cardio-note')?.value || '').trim();
+  const allNotes = [freeNote, noteParts.join(' · ')].filter(Boolean).join(' · ');
   DB.workouts.unshift({
     id: uid(), name: machine, cat: 'Cardio',
     sets:'', reps:'', weight:'', dur: dur||'', durSec: durSec||'', cals: cals||'',
-    tips:'', notes: noteParts.join(' · '), date: document.getElementById('cardio-date').value || today()
+    tips:'', notes: allNotes, date: document.getElementById('cardio-date').value || today()
   });
   save();
   const realCal = parseInt(cals)||0;
   toast(`${machine} logged ✓ ${realCal?'⌚'+realCal:'~'+estimateCalories({cat:'Cardio',dur,durSec})} cal`);
   fields.forEach(f => { const el=document.getElementById('cardio-'+f.id); if(el) el.value=''; });
   const secEl=document.getElementById('cardio-dursec'); if(secEl) secEl.value='';
+  const noteEl=document.getElementById('cardio-note'); if(noteEl) noteEl.value='';
   const cd=document.getElementById('cardio-date'); if(cd) cd.value='';
   document.getElementById('cardio-photo-result').innerHTML='';
   renderWorkouts();
@@ -2181,20 +2211,34 @@ async function handleCardioPhoto(event) {
   try {
     const images = await Promise.all(files.map(f => fileToResizedBase64(f)));
     const multi = images.length > 1;
-    const prompt = `${multi ? `These are ${images.length} photos of the SAME cardio workout — the machine's summary screen rotates through multiple pages, so each photo may show different metrics. MERGE them into ONE result.` : `This is a photo of a cardio machine's summary/workout screen.`} Read the numbers and respond ONLY with valid JSON, no markdown:
-{ "machine": "Treadmill|Stair Climber|Bike|Elliptical|Rower|Other Cardio", "duration_min": number_or_null, "duration_sec": number_or_null, "distance_mi": number_or_null, "speed_mph": number_or_null, "incline_pct": number_or_null, "level": number_or_null, "floors": number_or_null, "steps": number_or_null, "watts": number_or_null, "calories": number_or_null, "avg_hr": number_or_null }
-If a value isn't visible in any photo use null.${multi ? ' If the same metric appears on more than one photo, prefer the non-null value; if they differ, use the LARGER number (it represents the more complete/final reading).' : ''} TIME: read the EXACT time shown — do NOT round. If the screen shows MM:SS (e.g. 23:47), set "duration_min" to the whole minutes (23) and "duration_sec" to the seconds (47). If it shows only minutes, set duration_sec to 0. For a stair machine: "floors" is floors/levels climbed, "steps" is total steps, "watts" is power output, "level" is the resistance/speed level.`;
+    const prompt = `${multi ? `These are ${images.length} photos of the SAME cardio workout — merge them into ONE result.` : `This is a photo of a cardio workout summary screen.`} It is EITHER a gym cardio machine screen OR an AllTrails activity screen (a phone screenshot with a trail name, an activity type like "Road biking" or "Hiking", and stats like Distance / Elev. gain / Moving time / Avg pace / Calories / Total time). Read it and respond ONLY with valid JSON, no markdown:
+{ "machine": "Treadmill|Stair Climber|Bike|Elliptical|Rower|Hiking|Outdoor Cycling|Other Cardio", "duration_min": number_or_null, "duration_sec": number_or_null, "distance_mi": number_or_null, "speed_mph": number_or_null, "incline_pct": number_or_null, "level": number_or_null, "floors": number_or_null, "steps": number_or_null, "watts": number_or_null, "elevation_ft": number_or_null, "calories": number_or_null, "avg_hr": number_or_null, "pace": "string_or_null", "moving_time": "string_or_null", "trail": "string_or_null", "date": "YYYY-MM-DD_or_null" }
+Rules:
+- machine: choose the closest. For AllTrails activities: "Hiking" or "Walking" → "Hiking"; "Road biking" / "Cycling" / "Mountain biking" → "Outdoor Cycling"; "Running" → "Other Cardio".
+- TIME: read the EXACT time — do NOT round. On AllTrails use the TOTAL time (not moving time) as the duration. Convert H:MM:SS (e.g. 1:15:15 → duration_min=75, duration_sec=15) and MM:SS (e.g. 42:08 → duration_min=42, duration_sec=8). Machine screens showing only minutes → duration_sec=0.
+- elevation_ft: the "Elev. gain" value in feet (AllTrails). pace: the avg pace exactly as shown (e.g. "13:24"). moving_time: the moving time exactly as shown (e.g. "1:09:04"). trail: the trail name + location line if present. date: the activity date if shown, as YYYY-MM-DD.
+- Gym machines: "floors"/"steps"/"watts"/"level"/"incline" as applicable.
+${multi ? 'If a metric appears on more than one photo and they differ, use the larger (more complete) value. ' : ''}If a value isn't visible use null.`;
     const text = await callAIWithImage(prompt, images, 900);
     const clean = text.replace(/```json|```/g,'').trim();
     const m = clean.match(/\{[\s\S]*\}/);
     const data = JSON.parse(m ? m[0] : clean);
-    if(data.machine) { document.getElementById('cardio-machine').value = data.machine; }
+    const KNOWN_MACHINES = ['Treadmill','Stair Climber','Bike','Elliptical','Rower','Hiking','Outdoor Cycling','Other Cardio'];
+    if(data.machine && KNOWN_MACHINES.includes(data.machine)) { document.getElementById('cardio-machine').value = data.machine; }
+    else if(data.machine) { document.getElementById('cardio-machine').value = 'Other Cardio'; }
     renderCardioFields();
     const setIf = (id,val)=>{ const el=document.getElementById('cardio-'+id); if(el&&val!=null) el.value=val; };
     setIf('dur',data.duration_min); setIf('dursec',data.duration_sec); setIf('dist',data.distance_mi); setIf('speed',data.speed_mph);
     setIf('incline',data.incline_pct); setIf('level',data.level); setIf('floors',data.floors);
-    setIf('steps',data.steps); setIf('watts',data.watts);
+    setIf('steps',data.steps); setIf('watts',data.watts); setIf('elev',data.elevation_ft);
     setIf('cals',data.calories); setIf('hr',data.avg_hr);
+    // AllTrails extras → date + a descriptive note (trail · pace · moving time)
+    if(data.date && /^\d{4}-\d{2}-\d{2}$/.test(data.date)) setIf('date', data.date);
+    const noteBits = [];
+    if(data.trail) noteBits.push(String(data.trail).trim());
+    if(data.pace) noteBits.push('pace '+String(data.pace).trim()+'/mi');
+    if(data.moving_time) noteBits.push('moving '+String(data.moving_time).trim());
+    if(noteBits.length) { const ne=document.getElementById('cardio-note'); if(ne) ne.value = noteBits.join(' · '); }
     result.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-top:10px">✓ Read ${images.length>1?images.length+' screens':'the screen'} — check the values, fix anything off, then tap "Log Cardio"</p>`;
   } catch(err) {
     result.innerHTML = `<p style="font-family:var(--mono);font-size:11px;color:var(--accent2);margin-top:10px">Couldn't read it (${err.message}). Just type the numbers below instead.</p>`;
@@ -2298,12 +2342,24 @@ function filterItems(items, range, dateKey='date') {
   });
 }
 
+function setLogView(v) {
+  window._logView = v;
+  window._workoutShowCount = 5;
+  const ex = document.getElementById('logview-ex'), se = document.getElementById('logview-se');
+  if(ex && se) {
+    ex.className = 'btn btn-sm ' + (v==='exercises' ? 'btn-primary' : 'btn-ghost');
+    se.className = 'btn btn-sm ' + (v==='sessions' ? 'btn-primary' : 'btn-ghost');
+  }
+  renderWorkouts();
+}
+
 function renderWorkouts() {
   const range = document.getElementById('fit-filter')?.value||'all';
-  const items = filterItems(DB.workouts, range);
   const el = document.getElementById('workout-list');
   const wkStreak = document.getElementById('workout-streak');
   if(wkStreak) wkStreak.innerHTML = streakBadge(computeStreak(DB.workouts.map(w=>w.date)));
+  if((window._logView||'exercises')==='sessions') { renderSessions(range, el); return; }
+  const items = filterItems(DB.workouts, range);
   if(!items.length) { el.innerHTML='<div class="empty"><div class="empty-icon">🏋️</div>No workouts yet. Log your first one above!</div>'; return; }
 
   // This-week stats
@@ -2357,6 +2413,103 @@ function renderWorkouts() {
   }
   el.innerHTML = statsHtml + itemsHtml + moreHtml;
 }
+
+// ===== SESSIONS VIEW — groups the flat log into routine/freestyle sessions =====
+function buildSessionGroups(items) {
+  const groups = {};
+  items.forEach(w => {
+    let key, name, modified = false, isRoutine = false, freestyle = false;
+    if(w.sessionId) {
+      key = w.sessionId;
+      freestyle = !!w.freestyle;
+      name = w.routineName || (freestyle ? 'Freestyle' : 'Session');
+      modified = !!w.modified;
+      isRoutine = !freestyle;
+    } else {
+      // Legacy / ad-hoc entries (logged before session stamping existed)
+      const m = (w.notes||'').match(/^From routine:\s*([^·(]+?)(?:\s*\(|\s*·|$)/);
+      if(m) { name = m[1].trim(); key = 'legacy|'+w.date+'|'+name; isRoutine = true; if(/\(swapped from/.test(w.notes||'')) modified = true; }
+      else if(/^Freestyle/.test(w.notes||'')) { name = 'Freestyle'; freestyle = true; key = 'free|'+w.date; }
+      else { name = 'Individual entries'; key = 'indiv|'+w.date; }
+    }
+    if(!groups[key]) groups[key] = { key, name, date:w.date, ts:w.sessionTs||0, modified, isRoutine, freestyle, routineId:w.routineId||null, items:[] };
+    groups[key].items.push(w);
+    if(modified) groups[key].modified = true;
+    if(w.routineId && !groups[key].routineId) groups[key].routineId = w.routineId;
+  });
+  return Object.values(groups).sort((a,b)=> b.date.localeCompare(a.date) || (b.ts - a.ts));
+}
+function renderSessions(range, el) {
+  const items = filterItems(DB.workouts, range);
+  if(!items.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No sessions yet. Log a routine to see it here!</div>'; return; }
+  const list = buildSessionGroups(items);
+  window._sessionList = list;
+  const shown = (range==='all'||range==='week'||range==='month') ? (window._workoutShowCount||5) : list.length;
+  const visible = list.slice(0, shown);
+  const itemsHtml = visible.map((g,idx)=>{
+    const vol = g.items.reduce((s,w)=>s+workoutVolume(w),0);
+    const cals = g.items.reduce((s,w)=>s+workoutCalories(w).cal,0);
+    const icon = g.freestyle ? '⚡' : (g.isRoutine ? '📋' : '🏋️');
+    return `
+    <div class="list-item" style="cursor:pointer" onclick="openSessionDetail(${idx})">
+      <div class="li-icon" style="background:var(--bg3)">${icon}</div>
+      <div class="li-body">
+        <div class="li-title">${g.name} ${g.modified?'<span class="tag tag-orange">Modified</span>':''}</div>
+        <div class="li-meta">${g.items.length} exercise${g.items.length!==1?'s':''} · ${fmt(g.date)}</div>
+        <div class="li-meta" style="margin-top:2px;color:var(--accent3)">${cals.toLocaleString()} cal${vol?' · '+vol.toLocaleString()+' lbs volume':''}</div>
+      </div>
+      <div class="li-actions"><span style="color:var(--muted);font-size:20px;line-height:1">›</span></div>
+    </div>`;
+  }).join('');
+  let moreHtml = '';
+  const remaining = list.length - visible.length;
+  if(remaining > 0) {
+    moreHtml = `<div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-ghost btn-sm" style="flex:1" onclick="showMoreWorkouts(5)">Show 5 more (${remaining} left)</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1" onclick="showMoreWorkouts('all')">Show all</button>
+    </div>`;
+  } else if(shown > 5 && list.length > 5) {
+    moreHtml = `<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" style="width:100%" onclick="showMoreWorkouts('reset')">Collapse list</button></div>`;
+  }
+  el.innerHTML = itemsHtml + moreHtml;
+}
+function openSessionDetail(idx) {
+  const g = (window._sessionList||[])[idx];
+  if(!g) return;
+  const vol = g.items.reduce((s,w)=>s+workoutVolume(w),0);
+  const cals = g.items.reduce((s,w)=>s+workoutCalories(w).cal,0);
+  const rows = g.items.map(w=>{
+    const c = workoutCalories(w);
+    const stats = (Array.isArray(w.setList) && w.setList.length)
+      ? w.setList.map((s,k)=>`Set ${k+1}: ${s.reps||'?'}×${s.weight||'0'}lb`).join(' · ')
+      : [w.sets&&w.sets+' sets', w.reps&&w.reps+' reps', w.weight&&w.weight+' lbs', fmtDur(w)].filter(Boolean).join(' · ');
+    const swapped = /\(swapped from ([^)]+)\)/.exec(w.notes||'');
+    const cleanNote = (w.notes||'').replace(/^From routine:[^·]*/,'').replace(/\(swapped from[^)]*\)/,'').replace(/^\s*·\s*/,'').replace(/^\s*\([^)]*\)\s*/,'').replace(/^Freestyle session$/,'').trim();
+    return `
+    <div class="list-item">
+      <div class="li-icon" style="background:var(--bg3)">${w.cat==='Cardio'?'🏃':'🏋️'}</div>
+      <div class="li-body">
+        <div class="li-title">${w.name} ${swapped?'<span class="tag tag-orange" style="font-size:9px">swapped</span>':''}</div>
+        <div class="li-meta">${stats||'—'}</div>
+        <div class="li-meta" style="margin-top:2px;color:var(--accent3)">${c.real?'⌚ ':'~'}${c.cal} cal</div>
+        ${swapped?`<div class="li-meta" style="margin-top:2px;color:var(--muted)">↔ swapped from ${swapped[1]}</div>`:''}
+        ${cleanNote?`<div class="li-meta" style="margin-top:2px;color:var(--text)">📝 ${cleanNote}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  const routineLive = g.routineId && DB.routines.some(r=>r.id===g.routineId);
+  document.getElementById('session-detail-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+      <h2 style="margin:0">${g.name} ${g.modified?'<span class="tag tag-orange">Modified</span>':''}</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeSessionDetail()">✕</button>
+    </div>
+    <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:${g.modified?'8px':'14px'}">${fmt(g.date)} · ${g.items.length} exercise${g.items.length!==1?'s':''} · ${cals.toLocaleString()} cal${vol?' · '+vol.toLocaleString()+' lbs volume':''}</p>
+    ${g.modified?`<div style="background:rgba(255,170,80,.12);border:1px solid rgba(255,170,80,.3);border-radius:8px;padding:8px 10px;margin-bottom:14px;font-size:12px;color:var(--accent2)">⚠ This session differed from the routine — one or more exercises were swapped.</div>`:''}
+    ${routineLive?`<button class="btn btn-ghost btn-sm" style="margin-bottom:14px;width:100%" onclick="closeSessionDetail();switchFitTab('routines',document.querySelector('.fit-tab:nth-child(3)'));openRoutineDetail('${g.routineId}')">↗ Open this routine</button>`:''}
+    ${rows}`;
+  document.getElementById('session-detail-modal').classList.add('open');
+}
+function closeSessionDetail() { document.getElementById('session-detail-modal').classList.remove('open'); }
 
 function showMoreWorkouts(n) {
   if(n==='all') window._workoutShowCount = 99999;
@@ -5104,6 +5257,15 @@ const PF_EQUIPMENT = [
   { name:'Rowing Machine', cat:'Cardio', emoji:'🚣', muscles:'Full body, back, legs', sets:0, reps:0, weight:0, dur:20,
     steps:['Strap feet in, grab handle','Drive with legs first','Then lean back and pull to chest','Reverse the sequence to return'],
     tips:'Power comes from legs (60%), then core, then arms. Smooth strokes.' },
+  { name:'Outdoor Cycling', cat:'Cardio', emoji:'🚲', muscles:'Legs, cardio', sets:0, reps:0, weight:0, dur:30,
+    steps:['Helmet on; check tires & brakes','Ease in to warm up','Hold a steady cadence','Spin easy the last few minutes to cool down'],
+    tips:'Log it by time here — or use the Cardio screen to capture distance, speed & calories.' },
+  { name:'Outdoor Run', cat:'Cardio', emoji:'🏃', muscles:'Full body cardio', sets:0, reps:0, weight:0, dur:30,
+    steps:['Warm up with a brisk walk','Settle into a conversational pace','Hold steady effort','Cool down and stretch'],
+    tips:'Finishing a touch faster than you started builds endurance. Log by time or distance.' },
+  { name:'Walk / Hike', cat:'Cardio', emoji:'🥾', muscles:'Legs, low impact', sets:0, reps:0, weight:0, dur:30,
+    steps:['Comfortable shoes; water if it\'s long','Stay tall through the torso','Use hills to bump intensity','Ease off near the end'],
+    tips:'Underrated steady-state cardio and great for recovery days. Log by time.' },
 
   // FREE WEIGHTS
   { name:'Dumbbell Bench Press', cat:'Free Weights', emoji:'🏋️', muscles:'Chest, triceps, shoulders', sets:3, reps:10, weight:40, dur:0,
@@ -6055,11 +6217,11 @@ function renderBuilderList() {
   if(!builderExercises.length) { el.innerHTML='<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:8px 0">No exercises yet — add from above</div>'; return; }
   el.innerHTML = builderExercises.map((ex,i)=>{
     const linkedToNext = ex.superset && i < builderExercises.length-1;
-    const unit = ex.unit || 'reps';
-    const isCardio = ex.cat==='Cardio';
+    const unit = ex.unit || (ex.cat==='Cardio' ? 'cardio' : 'reps');
+    const isCardio = ex.cat==='Cardio' || unit==='cardio';
     // Build the measurement inputs based on unit
     let measureInputs;
-    if(isCardio && unit!=='interval') {
+    if(unit==='cardio') {
       measureInputs = `<input type="number" value="${ex.dur||''}" placeholder="min" onchange="builderExercises[${i}].dur=this.value" style="width:70px;padding:6px 10px;font-size:16px"><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min</span>`;
     } else if(unit==='seconds') {
       measureInputs = `<input type="number" value="${ex.sets||''}" placeholder="sets" onchange="builderExercises[${i}].sets=this.value" style="width:50px;padding:4px 6px;font-size:11px">
@@ -6082,6 +6244,7 @@ function renderBuilderList() {
           <div style="display:flex;gap:6px;margin-top:5px;align-items:center;flex-wrap:wrap">
             <select onchange="setExUnit(${i},this.value)" style="width:auto;padding:3px 6px;font-size:10px;font-family:var(--mono)">
               <option value="reps" ${unit==='reps'?'selected':''}>reps</option>
+              <option value="cardio" ${unit==='cardio'?'selected':''}>cardio (time)</option>
               <option value="seconds" ${unit==='seconds'?'selected':''}>timed hold</option>
               <option value="interval" ${unit==='interval'?'selected':''}>interval</option>
             </select>
@@ -6103,6 +6266,10 @@ function renderBuilderList() {
 
 function setExUnit(i, unit) {
   builderExercises[i].unit = unit;
+  // keep category in sync with the measurement type
+  if(unit==='cardio') { builderExercises[i].cat = 'Cardio'; if(!builderExercises[i].dur) builderExercises[i].dur = 20; }
+  else if(unit==='reps' || unit==='seconds') { if(builderExercises[i].cat==='Cardio') builderExercises[i].cat = 'Strength'; }
+  // 'interval' leaves the category as-is (could be HIIT cardio or a strength circuit)
   // sensible defaults when switching
   if(unit==='seconds' && (!builderExercises[i].reps || builderExercises[i].reps>120)) builderExercises[i].reps = 30;
   if(unit==='interval' && !builderExercises[i].reps) builderExercises[i].reps = 60;
@@ -6149,7 +6316,16 @@ function exKey(name) { return (name||'').toLowerCase().trim(); }
 function getExerciseHistory(name) {
   const k = exKey(name);
   return DB.workouts.filter(w => exKey(w.name) === k && w.weight)
-    .map(w => ({ date: w.date, weight: parseFloat(w.weight)||0, reps: parseInt(w.reps)||0, sets: parseInt(w.sets)||0 }));
+    .map(w => {
+      const reps = parseInt(w.reps)||0;
+      // minReps = the weakest set when per-set data exists, so we can require
+      // EVERY set cleared the bar (not just the first/strongest one).
+      let minReps = reps;
+      if(Array.isArray(w.setList) && w.setList.length) {
+        minReps = Math.min(...w.setList.map(s => parseInt(s.reps)||0));
+      }
+      return { date: w.date, weight: parseFloat(w.weight)||0, reps, minReps, sets: parseInt(w.sets)||0 };
+    });
 }
 
 // Last weight used for an exercise (for prefilling)
@@ -6158,7 +6334,8 @@ function getLastWeight(name) {
   return h.length ? h[0].weight : null;
 }
 
-// Overload check: if last 2 sessions hit or beat target reps at same weight, suggest +5
+// Overload check: only nudge when the last 2 sessions BEAT target reps by a clear
+// margin on EVERY set, at the same weight — i.e. you've got real headroom to add load.
 function getOverloadNudge(name, targetReps) {
   const h = getExerciseHistory(name);
   if(h.length < 2 || !targetReps) return null;
@@ -6166,10 +6343,12 @@ function getOverloadNudge(name, targetReps) {
   const recent = h.slice(0, 2);
   const w = recent[0].weight;
   if(!w || w <= 0) return null;
-  const consistent = recent.every(s => s.weight === w && s.reps >= targetReps);
-  if(consistent) {
+  const MARGIN = 2; // must clear target by 2+ reps on every set
+  const cleared = recent.every(s => s.weight === w && s.minReps >= targetReps + MARGIN);
+  if(cleared) {
     const bump = w >= 100 ? 10 : 5;
-    return { current: w, suggested: w + bump, reps: targetReps };
+    const hit = Math.min(recent[0].minReps, recent[1].minReps); // lowest set across both
+    return { current: w, suggested: w + bump, target: targetReps, hit };
   }
   return null;
 }
@@ -6371,7 +6550,7 @@ function openRoutineDetail(id) {
             ${swap?`<div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:1px">was: ${ex.name} · <a onclick="revertSwap(${i})" style="color:var(--accent2);cursor:pointer">revert</a></div>`:''}
             <div id="rsetup-display-${i}" style="font-family:var(--mono);font-size:10px;color:var(--accent3);margin-top:2px">${ex.setup?'🪑 '+ex.setup:''}</div>
             ${ex.weightHint && !last ? `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px">📌 ${ex.weightHint}</div>` : ''}
-            ${nudge?`<div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin-top:3px">💪 Ready to add weight? Try ${nudge.suggested}lbs (you hit ${nudge.reps} reps @ ${nudge.current}lbs twice)</div>`:''}
+            ${nudge?`<div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin-top:3px">💪 Time to level up: ${nudge.hit}+ reps on every set @ ${nudge.current}lb for 2 sessions (target ${nudge.target}). Try ${nudge.suggested}lb next.</div>`:''}
             <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap" id="rlog-simple-${i}">${logInputs}</div>
             <div id="rlog-perset-${i}" style="display:none;margin-top:6px"></div>
             <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
@@ -6675,11 +6854,14 @@ function logFreestyle() {
   captureFreestyle();
   const valid = freestyleExercises.filter(ex=>ex.name.trim());
   if(!valid.length) { toast('Add at least one exercise with a name'); return; }
+  const sessionId = uid();
+  const sessionTs = Date.now();
   valid.forEach(ex=>{
     DB.workouts.unshift({
       id:uid(), name:ex.name.trim(), cat:ex.cat,
       sets:ex.sets, reps:ex.reps, weight:ex.weight, dur:ex.dur||'',
-      notes:'Freestyle session', date:today()
+      notes:'Freestyle session', date:today(),
+      sessionId, sessionTs, freestyle:true, routineName:'Freestyle'
     });
   });
   save();
@@ -6746,6 +6928,9 @@ function logRoutineFromChecklist(id) {
   const r = DB.routines.find(x=>x.id===id);
   if(!r) return;
   const anyChecked = Object.values(activeRoutineLog).some(Boolean);
+  const sessionId = uid();
+  const sessionTs = Date.now();
+  const wasModified = Object.keys(routineSwaps).some(k => routineSwaps[k]);
   let logged = 0;
   r.exercises.forEach((ex,i)=>{
     if(anyChecked && !activeRoutineLog[i]) return; // skip unchecked when some are checked
@@ -6787,7 +6972,8 @@ function logRoutineFromChecklist(id) {
     const wo = {
       id:uid(), name:loggedName, cat:ex.cat||'Strength',
       sets, reps, weight, dur, unit,
-      notes, date:today()
+      notes, date:today(),
+      sessionId, sessionTs, routineId:id, routineName:r.name, modified:wasModified
     };
     if(setList) wo.setList = setList;
     DB.workouts.unshift(wo);
