@@ -1729,7 +1729,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.25.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.25.2</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -4205,7 +4205,7 @@ async function callMealAI(prompt, maxTokens) {
   if(prov === 'gemini') {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${key}`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{ maxOutputTokens: Math.max(maxTokens, 1200), thinkingConfig:{ thinkingBudget: 0 } } })
+      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{ maxOutputTokens: Math.max(maxTokens, 1200), thinkingConfig: geminiThinkingConfig(cfg.model) } })
     });
     const d = await res.json();
     if(!res.ok) throw new Error(d.error?.message||'API error');
@@ -4579,7 +4579,10 @@ const AI_PROVIDERS = {
     label: 'Google Gemini',
     keyPrefix: 'AIza',
     help: 'Get a free key at aistudio.google.com → Get API Key',
-    model: 'gemini-3.5-flash',
+    // 3.1-flash-lite: GA, high-volume/low-latency multimodal model in a less-contended
+    // capacity pool than the 3.5 flagship — fast, capable enough for screen/machine reads,
+    // and longer support runway than the 2.5 series.
+    model: 'gemini-3.1-flash-lite',
   },
   groq: {
     label: 'Groq',
@@ -5100,6 +5103,12 @@ async function callAI(prompt, maxTokens) {
 }
 
 // Try the active provider; if it fails (quota, key, error) fall back to any other provider that has a key.
+// Gemini 3.x rejects the legacy thinkingBudget param (400 if mixed with thinkingLevel) and
+// uses thinkingLevel instead; 2.5 and earlier use thinkingBudget. Pick the right one per model
+// so switching models never breaks the request. "minimal" = fastest, least thinking, no JSON truncation.
+function geminiThinkingConfig(model) {
+  return /gemini-3/.test(model || '') ? { thinkingLevel: 'minimal' } : { thinkingBudget: 0 };
+}
 async function callAIWithImage(prompt, imageBase64, maxTokens) {
   const active = getProvider();
   // Build provider try-order: active first, then others that have a key saved
@@ -5162,7 +5171,7 @@ async function callOneProvider(prov, key, prompt, imageBase64, maxTokens) {
     // Disable thinking for these structured tasks and give generous headroom.
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${key}`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{parts}], generationConfig:{ maxOutputTokens: Math.max(maxTokens, 1200), thinkingConfig:{ thinkingBudget: 0 } } })
+      body: JSON.stringify({ contents:[{parts}], generationConfig:{ maxOutputTokens: Math.max(maxTokens, 1200), thinkingConfig: geminiThinkingConfig(cfg.model) } })
     });
     const data = await res.json();
     if(!res.ok) throw new Error(data.error?.message || 'API error');
