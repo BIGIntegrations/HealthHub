@@ -1,4 +1,4 @@
-const CACHE_NAME = 'healthhub-v78';
+const CACHE_NAME = 'healthhub-v81';
 const ASSETS = [
   './',
   './index.html',
@@ -42,31 +42,40 @@ function isHTMLnav(request) {
 }
 
 self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
+  const req = event.request;
+  // CRITICAL: never intercept non-GET requests. AI API calls (Gemini/Claude/Groq)
+  // are POSTs — they must hit the network directly, or the SW can return null and
+  // break them ("Returned response is null").
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
   const isLocal = url.origin === self.location.origin;
+  const isCachedExternal = ASSETS.includes(req.url);
+  // Only handle our own origin + the few external assets we explicitly cache.
+  // Everything else (3rd-party GETs) passes straight through to the network.
+  if (!isLocal && !isCachedExternal) return;
 
   // NETWORK-FIRST for navigations and the app's own code/HTML.
-  // This is what makes new versions show up without delete+re-add.
-  if (isLocal && (isHTMLnav(event.request) || url.pathname.endsWith('index.html') || url.pathname.endsWith('/'))) {
+  if (isLocal && (isHTMLnav(req) || url.pathname.endsWith('index.html') || url.pathname.endsWith('/'))) {
     event.respondWith(
-      fetch(event.request).then(response => {
+      fetch(req).then(response => {
         if (response && response.status === 200) {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
         }
         return response;
-      }).catch(() => caches.match(event.request).then(c => c || caches.match('./index.html')))
+      }).catch(() => caches.match(req).then(c => c || caches.match('./index.html')))
     );
     return;
   }
 
-  // CACHE-FIRST for everything else (icons, fonts, libraries) — these rarely change.
+  // CACHE-FIRST for our known assets (icons, fonts, libraries) — these rarely change.
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      const fetchPromise = fetch(event.request).then(response => {
+    caches.match(req).then(cached => {
+      const fetchPromise = fetch(req).then(response => {
         if (response && response.status === 200) {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
         }
         return response;
       }).catch(() => cached);
