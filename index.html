@@ -1729,7 +1729,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.22.1</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.23.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -5633,27 +5633,38 @@ const MOBILITY_LIB = [
   { name:'Wrist Circles & Stretch', area:'Wrists', desc:'Warm up wrists before pressing/lifting', dur:'10 each' },
   { name:'Jumping Jacks', area:'Full Body', desc:'Classic dynamic full-body warmup', dur:'1-2 min' },
 ];
-let mobilityExtra = []; // AI-added ones for the session
+// AI-added mobility items are persisted in DB.mobilityExtra (survive reloads)
 
 function renderMobility() {
   const q = (document.getElementById('mobility-search')?.value||'').toLowerCase();
   const grid = document.getElementById('mobility-grid');
   if(!grid) return;
-  const all = [...MOBILITY_LIB, ...mobilityExtra];
+  const all = [...MOBILITY_LIB, ...(DB.mobilityExtra||[])];
   const filtered = all.filter(m => !q || m.name.toLowerCase().includes(q) || m.area.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q));
   if(!filtered.length) { grid.innerHTML='<div class="empty"><div class="empty-icon">🧘</div>No matches. Try the AI search above.</div>'; return; }
-  grid.innerHTML = filtered.map((m,i)=>`
+  grid.innerHTML = filtered.map((m,i)=>{
+    const custom = (DB.mobilityExtra||[]).some(x=>x.name===m.name);
+    return `
     <div class="list-item" style="flex-direction:column;align-items:stretch">
       <div style="display:flex;align-items:center;gap:10px">
         <div class="li-icon" style="background:var(--bg3)">🧘</div>
         <div class="li-body">
-          <div class="li-title">${m.name} <span class="tag tag-blue">${m.area}</span></div>
+          <div class="li-title">${m.name} <span class="tag tag-blue">${m.area}</span>${custom?' <span class="tag tag-green" style="font-size:9px">added</span>':''}</div>
           <div class="li-meta">${m.desc}${m.dur?' · ⏱ '+m.dur:''}</div>
         </div>
+        ${custom?`<button class="btn btn-danger btn-sm" onclick="removeMobility('${m.name.replace(/'/g,"")}')" title="Remove">✕</button>`:''}
       </div>
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="showMobilityDemo('${m.name.replace(/'/g,"")}','mob-demo-${i}')">▶ Show Demo</button>
       <div class="demo-media" id="mob-demo-${i}"></div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+function removeMobility(name) {
+  if(!DB.mobilityExtra) return;
+  DB.mobilityExtra = DB.mobilityExtra.filter(x=>x.name!==name);
+  save();
+  renderMobility();
+  toast('Removed');
 }
 
 async function aiSearchMobility() {
@@ -5697,8 +5708,10 @@ Return up to 5 stretches or mobility drills. Respond ONLY with valid JSON, no ma
 }
 
 function addMobilityFromAI(m) {
-  if(mobilityExtra.some(x=>x.name===m.name) || MOBILITY_LIB.some(x=>x.name===m.name)) { toast('Already in library'); return; }
-  mobilityExtra.push({ name:m.name, area:m.area||'Mobility', desc:m.desc||'', dur:m.dur||'' });
+  if(!DB.mobilityExtra) DB.mobilityExtra = [];
+  if(DB.mobilityExtra.some(x=>x.name===m.name) || MOBILITY_LIB.some(x=>x.name===m.name)) { toast('Already in library'); return; }
+  DB.mobilityExtra.push({ name:m.name, area:m.area||'Mobility', desc:m.desc||'', dur:m.dur||'' });
+  save();
   toast(m.name + ' added ✓');
   renderMobility();
 }
@@ -7177,7 +7190,7 @@ User's recent history: ${recent || 'none yet'}.${excludeText}
 
 Respond ONLY with valid JSON, no markdown, no code fences:
 {
-  "top": { "name":"", "category":"Strength|Cardio|Flexibility|HIIT|Sports|Other", "sets":number, "reps":number, "weight":number_or_0, "duration":number_or_0, "tip":"under 100 chars", "description":"one sentence" },
+  "top": { "name":"", "category":"Strength|Cardio|Flexibility|HIIT|Sports|Other", "sets":number, "reps":number, "weight":number_or_0, "duration":number_or_0, "tip":"under 100 chars", "description":"one sentence", "muscles":"primary muscles worked, comma-separated", "form":["2-4 short form cues, each under 70 chars"], "mistake":"the single most common mistake, under 80 chars" },
   "alternatives": [ { "name":"", "category":"", "sets":number, "reps":number, "weight":number_or_0, "duration":number_or_0, "tip":"" } ]
 }`;
 
@@ -7220,7 +7233,29 @@ function renderAiPrimary() {
   ].filter(Boolean).join('');
   document.getElementById('ai-desc').textContent = [aiSuggestion.description, aiSuggestion.tip ? '💡 ' + aiSuggestion.tip : ''].filter(Boolean).join(' — ');
   const demoBtn = document.getElementById('ai-demo-box');
-  if(demoBtn) demoBtn.innerHTML = `<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="showDemoInline('${(aiSuggestion.name||'').replace(/'/g,"")}','ai-demo-media')">▶ Show Demo</button><div class="demo-media" id="ai-demo-media"></div>`;
+  if(demoBtn) {
+    const nm = (aiSuggestion.name||'').replace(/'/g,"").replace(/"/g,'');
+    const muscJs = (aiSuggestion.muscles||'').replace(/'/g,"").replace(/"/g,'');
+    const form = Array.isArray(aiSuggestion.form) ? aiSuggestion.form.filter(Boolean) : [];
+    const hasBreakdown = !!(aiSuggestion.muscles || form.length || aiSuggestion.mistake);
+    let breakdownHtml = '';
+    if(aiSuggestion.muscles) breakdownHtml += `<div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:6px">🎯 Targets: ${aiSuggestion.muscles}</div>`;
+    if(form.length) breakdownHtml += `<div style="font-size:12px;font-weight:600;margin-bottom:3px">Form cues</div><ul style="margin:0 0 8px 16px;padding:0;font-size:12px;color:var(--text);line-height:1.5">${form.map(f=>`<li>${f}</li>`).join('')}</ul>`;
+    if(aiSuggestion.mistake) breakdownHtml += `<div style="font-size:12px;color:var(--accent2)">⚠ Common mistake: ${aiSuggestion.mistake}</div>`;
+    demoBtn.innerHTML = `
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${nm}','ai-demo-media')">▶ Demo</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleMuscleMap('${nm}','${muscJs}','ai-muscle-box')">🎯 Muscles</button>
+        ${hasBreakdown?`<button class="btn btn-ghost btn-sm" onclick="toggleAiBreakdown()">📋 Breakdown</button>`:''}
+      </div>
+      <div id="ai-breakdown-box" style="display:none;margin-top:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px">${breakdownHtml}</div>
+      <div id="ai-muscle-box"></div>
+      <div class="demo-media" id="ai-demo-media"></div>`;
+  }
+}
+function toggleAiBreakdown() {
+  const box = document.getElementById('ai-breakdown-box');
+  if(box) box.style.display = (box.style.display==='none'||!box.style.display) ? 'block' : 'none';
 }
 
 function renderAiAlternatives() {
