@@ -1745,7 +1745,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.28.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.29.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -2373,6 +2373,8 @@ function setLogView(v) {
   renderWorkouts();
 }
 
+// Shrink a stat number's font as it gets more digits so it always fits its card
+function statFont(s){ const n=(''+s).length; return n<=4?'20px':n===5?'17px':n===6?'14px':n===7?'12px':'11px'; }
 function renderWorkouts() {
   const range = document.getElementById('fit-filter')?.value||'all';
   const el = document.getElementById('workout-list');
@@ -2392,9 +2394,9 @@ function renderWorkouts() {
   let statsHtml = '';
   if(weekItems.length) {
     statsHtml = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-      <div class="metric-card"><div class="metric-label">Last 7 Days</div><div class="metric-value" style="font-size:clamp(13px,4.4vw,20px)">${weekItems.length}</div><div class="metric-sub">workouts</div></div>
-      <div class="metric-card"><div class="metric-label">Volume</div><div class="metric-value" style="font-size:clamp(13px,4.4vw,20px)">${weekVolume.toLocaleString()}</div><div class="metric-sub">lbs lifted</div></div>
-      <div class="metric-card"><div class="metric-label">Burned</div><div class="metric-value" style="font-size:clamp(13px,4.4vw,20px)">${weekCals.toLocaleString()}</div><div class="metric-sub">est. cal</div></div>
+      <div class="metric-card"><div class="metric-label">Last 7 Days</div><div class="metric-value" style="font-size:${statFont(weekItems.length)}">${weekItems.length}</div><div class="metric-sub">workouts</div></div>
+      <div class="metric-card"><div class="metric-label">Volume</div><div class="metric-value" style="font-size:${statFont(weekVolume.toLocaleString())}">${weekVolume.toLocaleString()}</div><div class="metric-sub">lbs lifted</div></div>
+      <div class="metric-card"><div class="metric-label">Burned</div><div class="metric-value" style="font-size:${statFont(weekCals.toLocaleString())}">${weekCals.toLocaleString()}</div><div class="metric-sub">est. cal</div></div>
     </div>`;
   }
 
@@ -6454,11 +6456,66 @@ function saveRoutine() {
 }
 
 function deleteRoutine(id) {
-  if(!confirm('Delete this routine?')) return;
-  DB.routines = DB.routines.filter(r=>r.id!==id);
-  // Remove from schedule
+  const r = DB.routines.find(x=>x.id===id);
+  if(!r) return;
+  if(!confirm('Delete the ENTIRE routine "'+r.name+'"?\n\nThis removes the whole routine, not just this session. (Your logged workouts are kept, and you can restore it from "Recently deleted" below.)')) return;
+  DB._trash = DB._trash || [];
+  DB._trash.unshift(r);
+  if(DB._trash.length > 8) DB._trash = DB._trash.slice(0,8);
+  DB.routines = DB.routines.filter(x=>x.id!==id);
   Object.keys(DB.schedule).forEach(d=>{ if(DB.schedule[d]===id) delete DB.schedule[d]; });
   save(); renderRoutines();
+  toast('Deleted "'+r.name+'" — restore it from Recently deleted');
+}
+function restoreRoutine(id) {
+  DB._trash = DB._trash || [];
+  const idx = DB._trash.findIndex(r=>r.id===id);
+  if(idx<0) return;
+  const r = DB._trash.splice(idx,1)[0];
+  DB.routines.push(r);
+  save(); renderRoutines();
+  toast('Restored "'+r.name+'" ✓');
+}
+// Recover a routine that was deleted before it could be trashed, by reconstructing it from the
+// most complete logged session that used its name.
+function rebuildRoutineFromHistory(name) {
+  const sessions = {};
+  DB.workouts.forEach(w=>{
+    if(w.routineName!==name || w.freestyle) return;
+    const k = w.sessionId || ('date-'+w.date);
+    (sessions[k] = sessions[k] || []).push(w);
+  });
+  const keys = Object.keys(sessions);
+  if(!keys.length) { toast('No logged history found for "'+name+'"'); return; }
+  let best = keys[0];
+  keys.forEach(k=>{ if(sessions[k].length > sessions[best].length) best = k; });
+  const exercises = sessions[best].map(w=>({
+    name:w.name, cat:w.cat||'Strength', sets:w.sets||'', reps:w.reps||'', weight:w.weight||'', dur:w.dur||'', unit:w.unit||'reps'
+  }));
+  DB.routines.push({ id:uid(), name:name, location:'Gym', exercises });
+  save(); renderRoutines();
+  toast('Rebuilt "'+name+'" from history ('+exercises.length+' exercises) ✓');
+}
+function routineRecoveryHtml() {
+  let html = '';
+  const trash = DB._trash || [];
+  if(trash.length) {
+    html += `<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:8px">🗑 RECENTLY DELETED — TAP TO RESTORE</div>
+      ${trash.map(r=>`<button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;margin-bottom:6px" onclick="restoreRoutine('${r.id}')">↺ ${r.name} <span style="color:var(--muted)">· ${r.exercises.length} exercises</span></button>`).join('')}
+    </div>`;
+  }
+  const logged = {};
+  DB.workouts.forEach(w=>{ if(w.routineName && w.routineName!=='Freestyle' && !w.freestyle) logged[w.routineName]=true; });
+  const live = new Set(DB.routines.map(r=>r.name));
+  const orphans = Object.keys(logged).filter(n=>!live.has(n) && !(DB._trash||[]).some(t=>t.name===n));
+  if(orphans.length) {
+    html += `<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:8px">♻ REBUILD FROM HISTORY — logged before, no longer saved as a routine</div>
+      ${orphans.map(n=>`<button class="btn btn-ghost btn-sm" style="width:100%;text-align:left;margin-bottom:6px" onclick="rebuildRoutineFromHistory('${n.replace(/'/g,"")}')">⤴ Rebuild "${n}"</button>`).join('')}
+    </div>`;
+  }
+  return html;
 }
 
 // ---- Library + schedule render ----
@@ -6534,9 +6591,13 @@ function renderRoutineExtras() {
       </div>
     </div>`).join('');
   box.innerHTML = `
-    <div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin:16px 0 6px">➕ ADD A PAST EXERCISE <span style="color:var(--muted)">— logs with this routine, won't change the saved routine</span></div>
-    ${routineExtras.length?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">${rows}</div>`:''}
-    <div style="background:var(--bg3);border-radius:10px;padding:10px">${recentExerciseChips('addRoutineExtra') || '<div style="font-family:var(--mono);font-size:10px;color:var(--muted)">No past exercises yet — log a few and they\'ll show here.</div>'}</div>`;
+    ${routineExtras.length?`<div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin:16px 0 6px">+ ADDED THIS SESSION <span style="color:var(--muted)">— logs with this routine, won't change the saved routine</span></div><div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">${rows}</div>`:''}
+    <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="toggleRecallChips()">➕ Add a past exercise</button>
+    <div id="recall-chips" style="display:none;background:var(--bg3);border-radius:10px;padding:10px;margin-top:8px">${recentExerciseChips('addRoutineExtra') || '<div style="font-family:var(--mono);font-size:10px;color:var(--muted)">No past exercises yet — log a few and they\'ll show here.</div>'}</div>`;
+}
+function toggleRecallChips() {
+  const b = document.getElementById('recall-chips');
+  if(b) b.style.display = (b.style.display==='none' || !b.style.display) ? 'block' : 'none';
 }
 
 // Returns history of logged sets for an exercise name, newest first
@@ -6601,11 +6662,11 @@ function renderRoutines() {
     list = list.filter(r => (r.location||'Gym') === routineFilter || (r.location||'Gym') === 'Anywhere');
   }
   if(!DB.routines.length) {
-    el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No routines yet. Tap "+ New Routine" to build one.</div>';
+    el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No routines yet. Tap "+ New Routine" to build one.</div>' + routineRecoveryHtml();
     return;
   }
   if(!list.length) {
-    el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No '+routineFilter+' routines yet.</div>';
+    el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No '+routineFilter+' routines yet.</div>' + routineRecoveryHtml();
     return;
   }
   el.innerHTML = list.map(r=>{
@@ -6620,7 +6681,7 @@ function renderRoutines() {
         ${days.length?`<span class="routine-day-badge">${days.join(' ')}</span>`:''}
       </div>
     </div>`;
-  }).join('');
+  }).join('') + routineRecoveryHtml();
 }
 
 function renderSchedule() {
