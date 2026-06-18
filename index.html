@@ -1745,7 +1745,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.29.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.32.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -2566,9 +2566,29 @@ function openSessionDetail(idx) {
     </div>
     <p style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:${g.modified?'8px':'14px'}">${fmt(g.date)} · ${g.items.length} exercise${g.items.length!==1?'s':''} · ${cals.toLocaleString()} cal${vol?' · '+vol.toLocaleString()+' lbs volume':''}</p>
     ${g.modified?`<div style="background:rgba(255,170,80,.12);border:1px solid rgba(255,170,80,.3);border-radius:8px;padding:8px 10px;margin-bottom:14px;font-size:12px;color:var(--accent2)">⚠ This session differed from the routine — one or more exercises were swapped.</div>`:''}
-    ${routineLive?`<button class="btn btn-ghost btn-sm" style="margin-bottom:14px;width:100%" onclick="closeSessionDetail();switchFitTab('routines',document.querySelector('.fit-tab:nth-child(3)'));openRoutineDetail('${g.routineId}')">↗ Open this routine</button>`:''}
+    ${routineLive
+      ? `<button class="btn btn-ghost btn-sm" style="margin-bottom:14px;width:100%" onclick="closeSessionDetail();switchFitTab('routines',document.querySelector('.fit-tab:nth-child(3)'));openRoutineDetail('${g.routineId}')">↗ Open this routine</button>`
+      : `<button class="btn btn-ghost btn-sm" style="margin-bottom:14px;width:100%" onclick="saveSessionAsRoutine(${idx})">💾 Save as routine</button>`}
     ${rows}`;
   document.getElementById('session-detail-modal').classList.add('open');
+}
+// Turn any logged session back into a reusable routine — also the recovery path for a
+// routine that was deleted before it could be trashed (find the day you did it, save it again).
+function saveSessionAsRoutine(idx) {
+  const g = (window._sessionList||[])[idx];
+  if(!g || !g.items || !g.items.length) return;
+  const def = (g.name && g.name!=='Freestyle' && g.name!=='Individual entries') ? g.name : 'New Routine';
+  const name = prompt('Name this routine:', def);
+  if(!name || !name.trim()) return;
+  const exercises = g.items.map(w=>({
+    name:w.name, cat:w.cat||'Strength', sets:w.sets||'', reps:w.reps||'', weight:w.weight||'', dur:w.dur||'', unit:w.unit||'reps'
+  }));
+  DB.routines.push({ id:uid(), name:name.trim(), location:'Gym', exercises });
+  save();
+  closeSessionDetail();
+  switchFitTab('routines', document.querySelector('.fit-tab:nth-child(3)'));
+  renderRoutines();
+  toast('Saved "'+name.trim()+'" as a routine ✓');
 }
 function closeSessionDetail() { document.getElementById('session-detail-modal').classList.remove('open'); }
 
@@ -6561,35 +6581,92 @@ function addFreestyleFromHistory(name) {
 let routineExtras = [];
 function captureRoutineExtras() {
   routineExtras.forEach((ex,j)=>{
-    const s=document.getElementById('rxtra-sets-'+j); if(s) ex.sets=s.value;
-    const r=document.getElementById('rxtra-reps-'+j); if(r) ex.reps=r.value;
-    const w=document.getElementById('rxtra-weight-'+j); if(w) ex.weight=w.value;
+    if(ex.perSet) {
+      const rows = document.querySelectorAll('#rxset-rows-'+j+' .rxset-row');
+      if(rows.length) ex.setRows = [...rows].map(r=>({ reps: r.querySelector('.rxset-reps')?.value||'', weight: r.querySelector('.rxset-weight')?.value||'' }));
+    } else {
+      const s=document.getElementById('rxtra-sets-'+j); if(s) ex.sets=s.value;
+      const r=document.getElementById('rxtra-reps-'+j); if(r) ex.reps=r.value;
+      const w=document.getElementById('rxtra-weight-'+j); if(w) ex.weight=w.value;
+    }
   });
 }
 function addRoutineExtra(name) {
   captureRoutineExtras();
   const h = getRecentExercises(300).find(e => exKey(e.name) === exKey(name)) || {};
-  routineExtras.push({ name, cat: h.cat||'Strength', sets: h.sets||'', reps: h.reps||'', weight: h.weight||'' });
+  routineExtras.push({ name, cat: h.cat||'Strength', sets: h.sets||'', reps: h.reps||'', weight: h.weight||'', perSet:false, setRows:null });
   renderRoutineExtras();
+  if(activeRoutineId) saveRoutineDraft();
 }
 function removeRoutineExtra(j) {
   captureRoutineExtras();
   routineExtras.splice(j,1);
   renderRoutineExtras();
+  if(activeRoutineId) saveRoutineDraft();
+}
+function toggleExtraPerSet(j) {
+  captureRoutineExtras();
+  const ex = routineExtras[j]; if(!ex) return;
+  ex.perSet = !ex.perSet;
+  if(ex.perSet && (!ex.setRows || !ex.setRows.length)) {
+    const n = Math.max(1, parseInt(ex.sets)||3);
+    ex.setRows = Array.from({length:n}, ()=>({ reps: ex.reps||'', weight: ex.weight||'' }));
+  }
+  renderRoutineExtras();
+  if(activeRoutineId) saveRoutineDraft();
+}
+function addExtraSetRow(j) {
+  captureRoutineExtras();
+  const ex = routineExtras[j]; if(!ex) return;
+  ex.setRows = ex.setRows || [];
+  const last = ex.setRows[ex.setRows.length-1] || {};
+  ex.setRows.push({ reps: last.reps||ex.reps||'', weight: last.weight||ex.weight||'' });
+  renderRoutineExtras();
+  if(activeRoutineId) saveRoutineDraft();
+}
+function removeExtraSetRow(j, k) {
+  captureRoutineExtras();
+  const ex = routineExtras[j]; if(!ex || !ex.setRows) return;
+  ex.setRows.splice(k,1);
+  renderRoutineExtras();
+  if(activeRoutineId) saveRoutineDraft();
+}
+function extraSetRowHtml(j, k, reps, weight) {
+  return `<div class="rxset-row" style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+    <span style="font-family:var(--mono);font-size:10px;color:var(--muted);width:40px">SET ${k+1}</span>
+    <input type="number" class="rxset-reps" value="${reps||''}" placeholder="reps" oninput="if(activeRoutineId)saveRoutineDraft()" style="width:56px;padding:4px 6px;font-size:11px">
+    <input type="number" class="rxset-weight" value="${weight||''}" placeholder="lbs" oninput="if(activeRoutineId)saveRoutineDraft()" style="width:60px;padding:4px 6px;font-size:11px">
+    <button class="btn btn-danger btn-sm" onclick="removeExtraSetRow(${j},${k})" style="flex:0 0 auto">✕</button>
+  </div>`;
 }
 function renderRoutineExtras() {
   const box = document.getElementById('routine-extras');
   if(!box) return;
-  const rows = routineExtras.map((ex,j)=>`
-    <div style="background:rgba(255,170,80,.06);border:1px solid var(--border);border-radius:8px;padding:8px">
+  const rows = routineExtras.map((ex,j)=>{
+    const nm = (ex.name||'').replace(/'/g,"").replace(/"/g,'');
+    let body;
+    if(ex.perSet) {
+      const sr = (ex.setRows && ex.setRows.length) ? ex.setRows : [{reps:ex.reps||'',weight:ex.weight||''}];
+      body = `<div id="rxset-rows-${j}">${sr.map((s,k)=>extraSetRowHtml(j,k,s.reps,s.weight)).join('')}</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="addExtraSetRow(${j})">+ Add Set</button>`;
+    } else {
+      body = `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="number" id="rxtra-sets-${j}" value="${ex.sets||''}" placeholder="sets" oninput="if(activeRoutineId)saveRoutineDraft()" style="width:48px;padding:4px 6px;font-size:11px">
+        <input type="number" id="rxtra-reps-${j}" value="${ex.reps||''}" placeholder="reps" oninput="if(activeRoutineId)saveRoutineDraft()" style="width:48px;padding:4px 6px;font-size:11px">
+        <input type="number" id="rxtra-weight-${j}" value="${ex.weight||''}" placeholder="lbs" oninput="if(activeRoutineId)saveRoutineDraft()" style="width:56px;padding:4px 6px;font-size:11px">
+      </div>`;
+    }
+    return `<div style="background:rgba(255,170,80,.06);border:1px solid var(--border);border-radius:8px;padding:8px">
       <div class="routine-ex-name">${ex.name} <span style="font-family:var(--mono);font-size:9px;background:rgba(255,170,80,.18);color:var(--accent2);padding:1px 5px;border-radius:8px">+ added</span></div>
-      <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
-        <input type="number" id="rxtra-sets-${j}" value="${ex.sets}" placeholder="sets" oninput="captureRoutineExtras()" style="width:48px;padding:4px 6px;font-size:11px">
-        <input type="number" id="rxtra-reps-${j}" value="${ex.reps}" placeholder="reps" oninput="captureRoutineExtras()" style="width:48px;padding:4px 6px;font-size:11px">
-        <input type="number" id="rxtra-weight-${j}" value="${ex.weight}" placeholder="lbs" oninput="captureRoutineExtras()" style="width:56px;padding:4px 6px;font-size:11px">
-        <button class="btn btn-danger btn-sm" onclick="removeRoutineExtra(${j})">✕</button>
+      <div style="margin-top:6px">${body}</div>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="showDemoInline('${nm}','rxtra-demo-${j}')">▶ Demo</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleExtraPerSet(${j})">⚙ ${ex.perSet?'Simple':'Per Set'}</button>
+        <button class="btn btn-danger btn-sm" onclick="removeRoutineExtra(${j})">✕ Remove</button>
       </div>
-    </div>`).join('');
+      <div class="demo-media" id="rxtra-demo-${j}"></div>
+    </div>`;
+  }).join('');
   box.innerHTML = `
     ${routineExtras.length?`<div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin:16px 0 6px">+ ADDED THIS SESSION <span style="color:var(--muted)">— logs with this routine, won't change the saved routine</span></div><div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">${rows}</div>`:''}
     <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="toggleRecallChips()">➕ Add a past exercise</button>
@@ -6644,11 +6721,37 @@ function getOverloadNudge(name, targetReps) {
 
 
 let routineFilter = 'All';
+let routineReorder = false;
 function setRoutineFilter(f, el) {
   routineFilter = f;
   document.querySelectorAll('#routine-filter-tabs .budget-tab').forEach(t=>t.classList.remove('active'));
   if(el) el.classList.add('active');
   renderRoutines();
+}
+function visibleRoutines() {
+  let list = DB.routines.slice(); // copy — never mutate the master order via sort
+  if(routineFilter !== 'All') list = list.filter(r => (r.location||'Gym') === routineFilter || (r.location||'Gym') === 'Anywhere');
+  list.sort((a,b)=> (b.favorite?1:0) - (a.favorite?1:0)); // favorites pinned on top; stable sort keeps manual order within each group
+  return list;
+}
+function toggleRoutineReorder() { routineReorder = !routineReorder; renderRoutines(); }
+function toggleFavorite(id) {
+  const r = DB.routines.find(x=>x.id===id);
+  if(!r) return;
+  r.favorite = !r.favorite;
+  save(); renderRoutines();
+}
+function moveRoutine(id, dir) {
+  const vis = visibleRoutines();
+  const vi = vis.findIndex(r=>r.id===id);
+  const target = vis[vi+dir];
+  if(!target) return;
+  if(!!target.favorite !== !!vis[vi].favorite) return; // can't arrow across the favorites divider
+  const a = DB.routines.findIndex(r=>r.id===id);
+  const b = DB.routines.findIndex(r=>r.id===target.id);
+  if(a<0||b<0) return;
+  const tmp = DB.routines[a]; DB.routines[a] = DB.routines[b]; DB.routines[b] = tmp;
+  save(); renderRoutines();
 }
 
 function renderRoutines() {
@@ -6657,10 +6760,7 @@ function renderRoutines() {
   renderTodayRoutine();
   const el = document.getElementById('routines-list');
   if(!el) return;
-  let list = DB.routines;
-  if(routineFilter !== 'All') {
-    list = list.filter(r => (r.location||'Gym') === routineFilter || (r.location||'Gym') === 'Anywhere');
-  }
+  let list = visibleRoutines();
   if(!DB.routines.length) {
     el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No routines yet. Tap "+ New Routine" to build one.</div>' + routineRecoveryHtml();
     return;
@@ -6669,17 +6769,30 @@ function renderRoutines() {
     el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No '+routineFilter+' routines yet.</div>' + routineRecoveryHtml();
     return;
   }
-  el.innerHTML = list.map(r=>{
+  const reorderBtn = DB.routines.length>1 ? `<button class="btn btn-ghost btn-sm" style="margin-bottom:10px${routineReorder?';color:var(--accent)':''}" onclick="toggleRoutineReorder()">${routineReorder?'✓ Done reordering':'↕ Reorder'}</button>` : '';
+  el.innerHTML = reorderBtn + list.map((r,idx)=>{
     const days = Object.keys(DB.schedule).filter(d=>DB.schedule[d]===r.id).map(d=>DOW[d]);
     const loc = r.location || 'Gym';
-    return `<div class="routine-card" onclick="openRoutineDetail('${r.id}')">
+    const fav = !!r.favorite;
+    const firstOfGroup = idx===0 || !!list[idx-1].favorite !== fav;
+    const lastOfGroup = idx===list.length-1 || !!list[idx+1].favorite !== fav;
+    return `<div class="routine-card" ${routineReorder?'style="display:flex;align-items:center;gap:10px"':`onclick="openRoutineDetail('${r.id}')"`}>
+      <div style="flex:1;min-width:0">
       <div class="routine-card-head">
         <div>
           <div class="routine-name">${r.name}</div>
           <div class="routine-meta">${loc} · ${r.exercises.length} exercise${r.exercises.length!==1?'s':''}${days.length?' · '+days.join(', '):''}</div>
         </div>
-        ${days.length?`<span class="routine-day-badge">${days.join(' ')}</span>`:''}
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          ${days.length?`<span class="routine-day-badge">${days.join(' ')}</span>`:''}
+          <button onclick="event.stopPropagation();toggleFavorite('${r.id}')" style="background:none;border:none;font-size:18px;cursor:pointer;padding:0;line-height:1" title="${fav?'Unfavorite':'Favorite'}">${fav?'⭐':'☆'}</button>
+        </div>
       </div>
+      </div>
+      ${routineReorder?`<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();moveRoutine('${r.id}',-1)" ${firstOfGroup?'disabled style="opacity:.3"':''}>▲</button>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();moveRoutine('${r.id}',1)" ${lastOfGroup?'disabled style="opacity:.3"':''}>▼</button>
+      </div>`:''}
     </div>`;
   }).join('') + routineRecoveryHtml();
 }
@@ -6733,8 +6846,9 @@ function loadRoutineDraft(id) {
 }
 function saveRoutineDraft() {
   if(!activeRoutineId) return;
+  captureRoutineExtras();
   const exCount = document.querySelectorAll('#routine-detail-exercises .routine-ex-row').length;
-  const state = { ts: Date.now(), checks: {...activeRoutineLog}, perSet: {...routinePerSet}, swaps: {...routineSwaps}, fields: {}, sets: {} };
+  const state = { ts: Date.now(), checks: {...activeRoutineLog}, perSet: {...routinePerSet}, swaps: {...routineSwaps}, extras: routineExtras, fields: {}, sets: {} };
   for(let i=0;i<exCount;i++) {
     ['sets','reps','weight','secs','dur','note'].forEach(f=>{
       const el = document.getElementById(`rlog-${f}-${i}`);
@@ -6785,10 +6899,10 @@ function openRoutineDetail(id) {
   activeRoutineId = id;
   activeRoutineLog = {};
   routinePerSet = {};
-  routineExtras = [];
-  // Temporary (this-session) exercise swaps live in the draft so they survive leave/return.
+  // Temporary (this-session) exercise swaps + added exercises live in the draft so they survive leave/return.
   const _draft = loadRoutineDraft(id);
   routineSwaps = (_draft && _draft.swaps) ? {..._draft.swaps} : {};
+  routineExtras = (_draft && Array.isArray(_draft.extras)) ? _draft.extras : [];
   const el = document.getElementById('routine-detail-content');
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
@@ -7303,12 +7417,19 @@ function logRoutineFromChecklist(id) {
   captureRoutineExtras();
   routineExtras.forEach(ex=>{
     if(!ex.name || !ex.name.trim()) return;
-    DB.workouts.unshift({
+    let sets = ex.sets||'', reps = ex.reps||'', weight = ex.weight||'', setList = null;
+    if(ex.perSet && Array.isArray(ex.setRows)) {
+      setList = ex.setRows.filter(s=>s.reps||s.weight).map(s=>({ reps:s.reps||'', weight:s.weight||'' }));
+      if(setList.length) { sets = setList.length; reps = setList[0].reps||''; weight = setList[0].weight||''; }
+    }
+    const wo = {
       id:uid(), name:ex.name.trim(), cat:ex.cat||'Strength',
-      sets:ex.sets||'', reps:ex.reps||'', weight:ex.weight||'', dur:'', unit:'reps',
+      sets:sets, reps:reps, weight:weight, dur:'', unit:'reps',
       notes:'From routine: '+r.name+' (added this session)', date:today(),
       sessionId, sessionTs, routineId:id, routineName:r.name, modified:wasModified
-    });
+    };
+    if(setList && setList.length) wo.setList = setList;
+    DB.workouts.unshift(wo);
     logged++;
   });
   save();
