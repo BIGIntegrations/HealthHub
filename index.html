@@ -931,6 +931,7 @@
       <div class="loading" id="freestyle-ai-loading"><div class="spinner"></div> Finding exercises…</div>
       <div id="freestyle-ai-result" style="margin-top:8px"></div>
     </div>
+    <div id="freestyle-recent" style="margin-bottom:12px"></div>
     <div id="freestyle-exercises"></div>
     <button class="btn btn-ghost" style="width:100%;margin-top:10px" onclick="addFreestyleExercise()">+ Add Exercise</button>
     <button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="logFreestyle()">✓ Log Session</button>
@@ -1744,7 +1745,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.27.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.28.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -6466,6 +6467,78 @@ const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 // ===== EXERCISE PROGRESS MEMORY (Fitbod-style overload) =====
 function exKey(name) { return (name||'').toLowerCase().trim(); }
 
+// ===== RECENT-EXERCISE RECALL (quick re-add of past exercises) =====
+// Distinct non-cardio exercises from history, most-recent first, carrying last-used stats.
+function getRecentExercises(limit) {
+  const seen = new Set(); const out = [];
+  for(const w of DB.workouts) {
+    if(w.cat === 'Cardio' || !w.name) continue;
+    const k = exKey(w.name);
+    if(seen.has(k)) continue;
+    seen.add(k);
+    out.push({ name: w.name, cat: w.cat||'Strength', sets: w.sets||'', reps: w.reps||'', weight: w.weight||'' });
+    if(out.length >= (limit||12)) break;
+  }
+  return out;
+}
+function recentExerciseChips(handler) {
+  const list = getRecentExercises(12);
+  if(!list.length) return '';
+  return `<div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:6px">↻ RECENT — TAP TO ADD</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${list.map(e=>{
+      const nm = e.name.replace(/'/g,"").replace(/"/g,'');
+      const stat = e.weight ? e.weight+'lb' : (e.reps ? e.reps+'r' : '');
+      return `<button onclick="${handler}('${nm}')" style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:5px 10px;font-size:11px;font-family:var(--mono);color:var(--text);cursor:pointer;white-space:nowrap">${e.name}${stat?' · '+stat:''}</button>`;
+    }).join('')}</div>`;
+}
+// Freestyle: tapping a chip drops a prefilled, editable row into the session
+function addFreestyleFromHistory(name) {
+  captureFreestyle();
+  const h = getRecentExercises(300).find(e => exKey(e.name) === exKey(name)) || {};
+  freestyleExercises.push({ name, cat: h.cat||'Strength', sets: h.sets||'', reps: h.reps||'', weight: h.weight||'' });
+  renderFreestyle();
+  saveFreestyleDraft();
+  toast(name + ' added — tweak & log');
+}
+// Routine: session-only extras that log WITH the routine but never change the saved routine
+let routineExtras = [];
+function captureRoutineExtras() {
+  routineExtras.forEach((ex,j)=>{
+    const s=document.getElementById('rxtra-sets-'+j); if(s) ex.sets=s.value;
+    const r=document.getElementById('rxtra-reps-'+j); if(r) ex.reps=r.value;
+    const w=document.getElementById('rxtra-weight-'+j); if(w) ex.weight=w.value;
+  });
+}
+function addRoutineExtra(name) {
+  captureRoutineExtras();
+  const h = getRecentExercises(300).find(e => exKey(e.name) === exKey(name)) || {};
+  routineExtras.push({ name, cat: h.cat||'Strength', sets: h.sets||'', reps: h.reps||'', weight: h.weight||'' });
+  renderRoutineExtras();
+}
+function removeRoutineExtra(j) {
+  captureRoutineExtras();
+  routineExtras.splice(j,1);
+  renderRoutineExtras();
+}
+function renderRoutineExtras() {
+  const box = document.getElementById('routine-extras');
+  if(!box) return;
+  const rows = routineExtras.map((ex,j)=>`
+    <div style="background:rgba(255,170,80,.06);border:1px solid var(--border);border-radius:8px;padding:8px">
+      <div class="routine-ex-name">${ex.name} <span style="font-family:var(--mono);font-size:9px;background:rgba(255,170,80,.18);color:var(--accent2);padding:1px 5px;border-radius:8px">+ added</span></div>
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
+        <input type="number" id="rxtra-sets-${j}" value="${ex.sets}" placeholder="sets" oninput="captureRoutineExtras()" style="width:48px;padding:4px 6px;font-size:11px">
+        <input type="number" id="rxtra-reps-${j}" value="${ex.reps}" placeholder="reps" oninput="captureRoutineExtras()" style="width:48px;padding:4px 6px;font-size:11px">
+        <input type="number" id="rxtra-weight-${j}" value="${ex.weight}" placeholder="lbs" oninput="captureRoutineExtras()" style="width:56px;padding:4px 6px;font-size:11px">
+        <button class="btn btn-danger btn-sm" onclick="removeRoutineExtra(${j})">✕</button>
+      </div>
+    </div>`).join('');
+  box.innerHTML = `
+    <div style="font-family:var(--mono);font-size:10px;color:var(--accent2);margin:16px 0 6px">➕ ADD A PAST EXERCISE <span style="color:var(--muted)">— logs with this routine, won't change the saved routine</span></div>
+    ${routineExtras.length?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">${rows}</div>`:''}
+    <div style="background:var(--bg3);border-radius:10px;padding:10px">${recentExerciseChips('addRoutineExtra') || '<div style="font-family:var(--mono);font-size:10px;color:var(--muted)">No past exercises yet — log a few and they\'ll show here.</div>'}</div>`;
+}
+
 // Returns history of logged sets for an exercise name, newest first
 function getExerciseHistory(name) {
   const k = exKey(name);
@@ -6651,6 +6724,7 @@ function openRoutineDetail(id) {
   activeRoutineId = id;
   activeRoutineLog = {};
   routinePerSet = {};
+  routineExtras = [];
   // Temporary (this-session) exercise swaps live in the draft so they survive leave/return.
   const _draft = loadRoutineDraft(id);
   routineSwaps = (_draft && _draft.swaps) ? {..._draft.swaps} : {};
@@ -6730,6 +6804,7 @@ function openRoutineDetail(id) {
         </div>`;
       }).join('')}
     </div>
+    <div id="routine-extras"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
       <button class="btn btn-primary" style="flex:1" onclick="logRoutineFromChecklist('${r.id}')">✓ Log Workout</button>
       <button class="btn btn-ghost btn-sm" onclick="openRoutineBuilder('${r.id}');closeRoutineDetail()">Edit</button>
@@ -6740,6 +6815,7 @@ function openRoutineDetail(id) {
   `;
   document.getElementById('routine-detail-modal').classList.add('open');
   restoreRoutineDraft(id);
+  renderRoutineExtras();
 }
 
 // User edited a set/rep/weight field — auto-check that exercise and save the draft
@@ -6940,6 +7016,8 @@ function saveFreestyleDraft() {
   try { localStorage.setItem(draftKey('freestyle'), JSON.stringify({ ts:Date.now(), exercises:freestyleExercises })); } catch(e){}
 }
 function renderFreestyle() {
+  const rec = document.getElementById('freestyle-recent');
+  if(rec) rec.innerHTML = recentExerciseChips('addFreestyleFromHistory');
   const el = document.getElementById('freestyle-exercises');
   el.innerHTML = freestyleExercises.map((ex,i)=>{
     const isCardio = ex.cat==='Cardio';
@@ -7158,6 +7236,18 @@ function logRoutineFromChecklist(id) {
     };
     if(setList) wo.setList = setList;
     DB.workouts.unshift(wo);
+    logged++;
+  });
+  // Session-only extras added via "+ Add a past exercise" — logged with this routine session
+  captureRoutineExtras();
+  routineExtras.forEach(ex=>{
+    if(!ex.name || !ex.name.trim()) return;
+    DB.workouts.unshift({
+      id:uid(), name:ex.name.trim(), cat:ex.cat||'Strength',
+      sets:ex.sets||'', reps:ex.reps||'', weight:ex.weight||'', dur:'', unit:'reps',
+      notes:'From routine: '+r.name+' (added this session)', date:today(),
+      sessionId, sessionTs, routineId:id, routineName:r.name, modified:wasModified
+    });
     logged++;
   });
   save();
