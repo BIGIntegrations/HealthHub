@@ -341,7 +341,7 @@
   .metric-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .metric-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 10px 8px; text-align: center; min-width: 0; }
   .metric-label { font-family: var(--mono); font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; margin-bottom: 3px; white-space: nowrap; }
-  .metric-value { font-weight: 800; color: var(--accent); line-height: 1.1; white-space: nowrap; }
+  .metric-value { font-weight: 800; color: var(--accent); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .metric-sub { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
   .metric-tile { background: var(--bg3); border-radius: 10px; padding: 14px; }
   .mt-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; }
@@ -1687,6 +1687,21 @@
     </div>
   </div>
   <div class="card">
+    <h2>🛟 Vision Backup — Claude</h2>
+    <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:14px">When Gemini is overloaded or down, photo features (machine ID, cardio &amp; meal screen reads) and the workout assistant automatically fall back to Claude. Gemini stays your primary — this only kicks in on failure, roughly ⅓ of a cent per photo. Get a key at console.anthropic.com → API Keys.</p>
+    <div class="api-key-wrap">
+      <label>Claude API Key</label>
+      <input type="password" id="claude-key-input" placeholder="sk-ant-..." autocomplete="off">
+      <button class="api-key-toggle" onclick="toggleClaudeKeyVisibility()" id="claude-key-toggle">👁</button>
+    </div>
+    <div class="settings-status" id="claude-key-status"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary" onclick="saveClaudeKey()">Save Backup Key</button>
+      <button class="btn btn-ghost" onclick="testClaudeKey()">Test</button>
+      <button class="btn btn-danger btn-sm" onclick="clearClaudeKey()">Clear</button>
+    </div>
+  </div>
+  <div class="card">
     <h2>🍽 Meals AI</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:14px">Powers meal calorie estimates. Can be a different provider than your workout AI. Uses the key saved above for whichever provider you pick. Groq is great here.</p>
     <div class="input-row"><div>
@@ -1729,7 +1744,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.25.2</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.27.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -2376,9 +2391,9 @@ function renderWorkouts() {
   let statsHtml = '';
   if(weekItems.length) {
     statsHtml = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
-      <div class="metric-card"><div class="metric-label">Last 7 Days</div><div class="metric-value" style="font-size:20px">${weekItems.length}</div><div class="metric-sub">workouts</div></div>
-      <div class="metric-card"><div class="metric-label">Volume</div><div class="metric-value" style="font-size:20px">${weekVolume.toLocaleString()}</div><div class="metric-sub">lbs lifted</div></div>
-      <div class="metric-card"><div class="metric-label">Burned</div><div class="metric-value" style="font-size:20px">${weekCals.toLocaleString()}</div><div class="metric-sub">est. cal</div></div>
+      <div class="metric-card"><div class="metric-label">Last 7 Days</div><div class="metric-value" style="font-size:clamp(13px,4.4vw,20px)">${weekItems.length}</div><div class="metric-sub">workouts</div></div>
+      <div class="metric-card"><div class="metric-label">Volume</div><div class="metric-value" style="font-size:clamp(13px,4.4vw,20px)">${weekVolume.toLocaleString()}</div><div class="metric-sub">lbs lifted</div></div>
+      <div class="metric-card"><div class="metric-label">Burned</div><div class="metric-value" style="font-size:clamp(13px,4.4vw,20px)">${weekCals.toLocaleString()}</div><div class="metric-sub">est. cal</div></div>
     </div>`;
   }
 
@@ -4195,39 +4210,10 @@ function updateMealBadge() {
   if(badge) badge.textContent = AI_PROVIDERS[p]?.label || 'Groq';
 }
 
-// Meal-specific AI call that uses the meal provider, not the global one
+// Meal text estimates use the meal provider first, then fall back to any other provider
+// with a key (same retry + fallback as the rest of the app) so a Groq hiccup can't freeze logging.
 async function callMealAI(prompt, maxTokens) {
-  const prov = getMealProvider();
-  const key = localStorage.getItem('healthhub_apikey_' + prov) || '';
-  const cfg = AI_PROVIDERS[prov];
-  if(!key) throw new Error('No '+(cfg?.label||prov)+' key — add one in ⚙ Settings');
-  maxTokens = maxTokens || 400;
-  if(prov === 'gemini') {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${key}`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{ maxOutputTokens: Math.max(maxTokens, 1200), thinkingConfig: geminiThinkingConfig(cfg.model) } })
-    });
-    const d = await res.json();
-    if(!res.ok) throw new Error(d.error?.message||'API error');
-    return d.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  }
-  if(prov === 'claude') {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST', headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body: JSON.stringify({ model:cfg.model, max_tokens:maxTokens, messages:[{role:'user',content:prompt}] })
-    });
-    const d = await res.json();
-    if(!res.ok) throw new Error(d.error?.message||'API error');
-    return d.content?.[0]?.text || '';
-  }
-  const url = prov==='groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions';
-  const res = await fetch(url, {
-    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-    body: JSON.stringify({ model:cfg.model, max_tokens:maxTokens, messages:[{role:'user',content:prompt}] })
-  });
-  const d = await res.json();
-  if(!res.ok) throw new Error(d.error?.message||'API error');
-  return d.choices?.[0]?.message?.content || '';
+  return callAIWithImage(prompt, null, maxTokens || 400, getMealProvider());
 }
 
 async function estimateMeal() {
@@ -5109,8 +5095,8 @@ async function callAI(prompt, maxTokens) {
 function geminiThinkingConfig(model) {
   return /gemini-3/.test(model || '') ? { thinkingLevel: 'minimal' } : { thinkingBudget: 0 };
 }
-async function callAIWithImage(prompt, imageBase64, maxTokens) {
-  const active = getProvider();
+async function callAIWithImage(prompt, imageBase64, maxTokens, preferredProvider) {
+  const active = preferredProvider || getProvider();
   // Build provider try-order: active first, then others that have a key saved
   let order = [active];
   ['groq','gemini','openrouter','claude'].forEach(p => { if(p!==active) order.push(p); });
@@ -5201,6 +5187,43 @@ async function testAPIKey() {
   } catch(e) { setApiStatus('✗ ' + e.message, 'var(--danger)'); }
 }
 
+// ===== CLAUDE VISION BACKUP KEY =====
+function toggleClaudeKeyVisibility() {
+  const inp = document.getElementById('claude-key-input');
+  const btn = document.getElementById('claude-key-toggle');
+  if(inp){ inp.type = inp.type==='password'?'text':'password'; if(btn) btn.textContent = inp.type==='password'?'👁':'🙈'; }
+}
+function updateClaudeKeyStatus() {
+  const st = document.getElementById('claude-key-status');
+  if(!st) return;
+  const has = !!localStorage.getItem('healthhub_apikey_claude');
+  st.textContent = has ? '✓ Backup active — kicks in automatically if Gemini fails.' : 'No backup key set.';
+  st.style.color = has ? 'var(--accent)' : 'var(--muted)';
+}
+function saveClaudeKey() {
+  const inp = document.getElementById('claude-key-input');
+  const st = document.getElementById('claude-key-status');
+  const k = (inp && inp.value || '').trim();
+  if(!k) { localStorage.removeItem('healthhub_apikey_claude'); updateClaudeKeyStatus(); return; }
+  if(!k.startsWith('sk-ant-')) { if(st){ st.textContent='⚠ Claude keys start with sk-ant-'; st.style.color='var(--accent2)'; } return; }
+  localStorage.setItem('healthhub_apikey_claude', k);
+  if(st){ st.textContent='✓ Saved — Claude will back up Gemini automatically.'; st.style.color='var(--accent)'; }
+}
+async function testClaudeKey() {
+  const st = document.getElementById('claude-key-status');
+  const k = (document.getElementById('claude-key-input') && document.getElementById('claude-key-input').value || '').trim() || localStorage.getItem('healthhub_apikey_claude') || '';
+  if(!k){ if(st){ st.textContent='Paste a key first.'; st.style.color='var(--muted)'; } return; }
+  if(st){ st.textContent='Testing…'; st.style.color='var(--muted)'; }
+  try {
+    const txt = await callOneProvider('claude', k, 'Reply with the single word OK', null, 20);
+    if(st){ st.textContent = txt ? '✓ Working — backup is live.' : '⚠ No response'; st.style.color = txt?'var(--accent)':'var(--accent2)'; }
+  } catch(e){ if(st){ st.textContent='⚠ '+(e.message||'failed'); st.style.color='var(--accent2)'; } }
+}
+function clearClaudeKey() {
+  localStorage.removeItem('healthhub_apikey_claude');
+  const inp = document.getElementById('claude-key-input'); if(inp) inp.value='';
+  updateClaudeKeyStatus();
+}
 function renderSettings() {
   // Appearance: theme buttons + accent
   const tp = document.getElementById('theme-picker');
@@ -5234,6 +5257,10 @@ function renderSettings() {
   const ytStatus = document.getElementById('yt-status');
   if(ytInp) ytInp.value = getYtKey();
   if(ytStatus) { const yk=getYtKey(); ytStatus.textContent = yk?'✓ YouTube key saved':'No YouTube key'; ytStatus.style.color = yk?'var(--accent)':'var(--muted)'; }
+  // Claude vision backup key
+  const clInp = document.getElementById('claude-key-input');
+  if(clInp) clInp.value = localStorage.getItem('healthhub_apikey_claude') || '';
+  updateClaudeKeyStatus();
   renderMealSettings();
 }
 
