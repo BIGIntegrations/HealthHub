@@ -498,20 +498,24 @@
       <h2 style="margin:0 0 4px">🧠 AI Coach</h2>
       <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 14px">Knows your training. Ask for a split, progression help, or a plan around your schedule.</p>
       <div id="coach-insights"></div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="btn btn-ghost btn-sm" onclick="newCoachTopic()">＋ New topic</button>
+        <button class="btn btn-ghost btn-sm" id="coach-threads-toggle" onclick="toggleCoachThreads()">🕘 Past</button>
+      </div>
+      <div id="coach-threads" style="display:none;margin-bottom:12px"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
         <button class="btn btn-ghost btn-sm" onclick="coachQuick('analyze')">📊 Analyze last week</button>
         <button class="btn btn-ghost btn-sm" onclick="coachQuick('balance')">⚖️ Balance check</button>
         <button class="btn btn-ghost btn-sm" onclick="coachQuick('deload')">🛌 Should I deload?</button>
       </div>
       <div id="coach-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
-      <div id="coach-messages" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
+      <div id="coach-messages" style="display:flex;flex-direction:column;gap:10px;min-height:140px;max-height:46vh;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:12px"></div>
       <div style="display:flex;gap:8px;align-items:flex-end">
         <textarea id="coach-input" rows="1" placeholder="Ask your coach…" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" style="flex:1;resize:none;padding:10px;font-size:16px"></textarea>
         <button class="btn btn-primary" onclick="sendCoach()">Send</button>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <div style="margin-top:8px">
         <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">General fitness info, not medical or professional training advice.</span>
-        <button class="btn btn-ghost btn-sm" onclick="clearCoach()" style="font-size:10px">Clear chat</button>
       </div>
     </div>
   </div>
@@ -1773,7 +1777,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.33.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.34.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -6167,20 +6171,96 @@ function switchFitTab(tab, el) {
 }
 
 // ================= AI COACH =================
-let coachMessages = [];
+let coachThreadId = null;
+let coachPending = false;
+let coachThreadsOpen = false;
 const COACH_CHIPS = ['Suggest a split for me','Help me progress on a lift','Plan around my schedule','Quick workout for today','What should I train next?'];
 function escapeHtml(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function hasAnyAIKey(){ return ['groq','gemini','openrouter','claude'].some(p=>localStorage.getItem('healthhub_apikey_'+p)); }
 
+function coachThreadsArr(){ if(!Array.isArray(DB.coachThreads)) DB.coachThreads = []; return DB.coachThreads; }
+function coachTitleFrom(msgs){
+  const first = (msgs||[]).find(m=>m.role==='user');
+  if(!first) return 'New conversation';
+  const t = first.content.replace(/\s+/g,' ').trim();
+  return t.length>42 ? t.slice(0,42)+'…' : t;
+}
+function migrateCoachChat(){ // one-time: fold the old single conversation into a thread
+  if(Array.isArray(DB.coachChat) && DB.coachChat.length && !coachThreadsArr().length){
+    const msgs = DB.coachChat.filter(m=>!m.pending);
+    DB.coachThreads.push({ id:uid(), title:coachTitleFrom(msgs), created:Date.now(), updated:Date.now(), messages:msgs });
+    DB.coachChat = null; save();
+  }
+}
+function activeCoachThread(){
+  const arr = coachThreadsArr();
+  let t = arr.find(x=>x.id===coachThreadId);
+  if(!t){
+    if(arr.length){ t = arr.slice().sort((a,b)=>(b.updated||0)-(a.updated||0))[0]; }
+    else { t = { id:uid(), title:null, created:Date.now(), updated:Date.now(), messages:[] }; arr.push(t); }
+    coachThreadId = t.id;
+  }
+  return t;
+}
+function newCoachTopic(){
+  const arr = coachThreadsArr();
+  const cur = arr.find(x=>x.id===coachThreadId);
+  if(!(cur && (!cur.messages || !cur.messages.length))){ // don't spawn empties; reuse an empty current
+    const t = { id:uid(), title:null, created:Date.now(), updated:Date.now(), messages:[] };
+    arr.push(t); coachThreadId = t.id; save();
+  }
+  coachPending = false; coachThreadsOpen = false;
+  renderCoach();
+  const inp = document.getElementById('coach-input'); if(inp) inp.focus();
+}
+function openCoachThread(id){ coachThreadId = id; coachPending = false; coachThreadsOpen = false; renderCoach(); }
+function deleteCoachThread(id, ev){
+  if(ev) ev.stopPropagation();
+  if(!confirm('Delete this conversation? This can\'t be undone.')) return;
+  const arr = coachThreadsArr();
+  const i = arr.findIndex(x=>x.id===id); if(i<0) return;
+  arr.splice(i,1);
+  if(coachThreadId===id) coachThreadId = null;
+  save(); renderCoach();
+}
+function toggleCoachThreads(){ coachThreadsOpen = !coachThreadsOpen; renderCoachThreadList(); }
+function renderCoachThreadList(){
+  const wrap = document.getElementById('coach-threads');
+  const btn = document.getElementById('coach-threads-toggle');
+  const arr = coachThreadsArr().filter(t=>t.messages && t.messages.length).sort((a,b)=>(b.updated||0)-(a.updated||0));
+  if(btn) btn.textContent = '🕘 Past ('+arr.length+')';
+  if(!wrap) return;
+  if(!coachThreadsOpen){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  if(!arr.length){ wrap.innerHTML='<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px">No saved conversations yet.</div>'; return; }
+  wrap.innerHTML = arr.map(t=>{
+    const title = t.title || coachTitleFrom(t.messages);
+    const d = new Date(t.updated||t.created); const ds = (d.getMonth()+1)+'/'+d.getDate();
+    const active = t.id===coachThreadId;
+    return `<div onclick="openCoachThread('${t.id}')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid ${active?'var(--accent)':'var(--border)'};border-radius:8px;margin-bottom:6px;cursor:pointer">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(title)}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted)">${ds} · ${t.messages.length} msg${active?' · current':''}</div>
+      </div>
+      <button onclick="deleteCoachThread('${t.id}',event)" style="background:none;border:none;color:var(--muted);font-size:15px;cursor:pointer;flex-shrink:0;padding:2px 4px">✕</button>
+    </div>`;
+  }).join('');
+}
 function renderCoach() {
-  if((!coachMessages || !coachMessages.length) && Array.isArray(DB.coachChat)) coachMessages = DB.coachChat;
+  coachThreadsArr(); migrateCoachChat(); activeCoachThread();
+  DB.coachThreads = coachThreadsArr().filter(x=>(x.messages && x.messages.length) || x.id===coachThreadId); // prune abandoned empties
   renderCoachChips();
   coachLocalInsights();
+  renderCoachThreadList();
   renderCoachMessages();
 }
 function renderCoachChips() {
   const el = document.getElementById('coach-chips');
-  if(el) el.innerHTML = COACH_CHIPS.map(c=>`<button onclick="sendCoach('${c.replace(/'/g,"")}')" style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:6px 11px;font-size:11px;font-family:var(--mono);color:var(--text);cursor:pointer">${c}</button>`).join('');
+  if(!el) return;
+  const t = activeCoachThread();
+  if(t.messages.length){ el.style.display='none'; el.innerHTML=''; return; } // declutter once a convo is going
+  el.style.display='flex';
+  el.innerHTML = COACH_CHIPS.map(c=>`<button onclick="sendCoach('${c.replace(/'/g,"")}')" style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:6px 11px;font-size:11px;font-family:var(--mono);color:var(--text);cursor:pointer">${c}</button>`).join('');
 }
 // Free, instant, no-AI value surfaced every time the tab opens
 function coachLocalInsights() {
@@ -6257,42 +6337,50 @@ async function sendCoach(preset) {
   const text = (preset || (inp ? inp.value.trim() : '')).trim();
   if(!text) return;
   if(inp && !preset){ inp.value=''; inp.style.height='auto'; }
+  const t = activeCoachThread();
   if(!hasAnyAIKey()){
-    coachMessages.push({ role:'user', content:text });
-    coachMessages.push({ role:'assistant', content:'Add an API key in ⚙️ Settings to use the coach — a free Groq key works great and keeps this free.' });
-    saveCoach(); renderCoachMessages(); return;
+    t.messages.push({ role:'user', content:text });
+    t.messages.push({ role:'assistant', content:'Add an API key in ⚙️ Settings to use the coach — a free Groq key works great and keeps this free.' });
+    if(!t.title) t.title = coachTitleFrom(t.messages);
+    t.updated = Date.now(); save(); renderCoach(); return;
   }
-  coachMessages.push({ role:'user', content:text });
-  coachMessages.push({ role:'assistant', content:'', pending:true });
-  saveCoach(); renderCoachMessages();
+  t.messages.push({ role:'user', content:text });
+  if(!t.title) t.title = coachTitleFrom(t.messages);
+  t.updated = Date.now();
+  save();
+  coachPending = true;
+  renderCoachChips(); renderCoachMessages(); renderCoachThreadList();
   const context = buildCoachContext() + coachExerciseContext(text);
-  const history = coachMessages.filter(m=>!m.pending).slice(-8).map(m=>`${m.role==='user'?'User':'Coach'}: ${m.content}`).join('\n');
+  const history = t.messages.slice(-8).map(m=>`${m.role==='user'?'User':'Coach'}: ${m.content}`).join('\n');
   const prompt = `You are an encouraging, knowledgeable strength & conditioning coach built into a fitness tracking app. Be concise and practical — under ~180 words unless a full plan is requested. Ground every answer in the user's real data below; if data is missing, say so briefly. When you propose a workout, list each exercise as "Name — sets x reps" on its own line so it can be saved as a routine. Never give medical advice.\n\n${context}\nCONVERSATION:\n${history}\n\nCoach:`;
   try {
     const reply = await callAIWithImage(prompt, null, 800, 'groq');
-    coachMessages = coachMessages.filter(m=>!m.pending);
-    coachMessages.push({ role:'assistant', content: (reply||'').trim() || 'No response came back — try again.' });
+    t.messages.push({ role:'assistant', content: (reply||'').trim() || 'No response came back — try again.' });
   } catch(e) {
-    coachMessages = coachMessages.filter(m=>!m.pending);
-    coachMessages.push({ role:'assistant', content: 'Something went wrong: '+(e.message||e)+'. Try again in a moment.' });
+    t.messages.push({ role:'assistant', content: 'Something went wrong: '+(e.message||e)+'. Try again in a moment.' });
   }
-  saveCoach(); renderCoachMessages();
+  coachPending = false;
+  t.updated = Date.now();
+  save();
+  renderCoachMessages(); renderCoachThreadList();
 }
 function renderCoachMessages() {
   const el = document.getElementById('coach-messages');
   if(!el) return;
-  if(!coachMessages.length){ el.innerHTML = `<div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:10px">Ask a question or tap a suggestion to start.</div>`; return; }
-  el.innerHTML = coachMessages.map((m,i)=>{
+  const msgs = activeCoachThread().messages;
+  if(!msgs.length && !coachPending){ el.innerHTML = `<div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:10px">Ask a question or tap a suggestion to start.</div>`; return; }
+  let html = msgs.map((m,i)=>{
     if(m.role==='user') return `<div style="align-self:flex-end;max-width:85%;background:var(--accent);color:#00171a;border-radius:13px 13px 3px 13px;padding:8px 11px;font-size:13px;line-height:1.45">${escapeHtml(m.content).replace(/\n/g,'<br>')}</div>`;
-    if(m.pending) return `<div style="align-self:flex-start;background:var(--bg3);border-radius:13px 13px 13px 3px;padding:8px 12px;font-size:13px;color:var(--muted)">Thinking…</div>`;
     const looksLikePlan = /\b\d+\s*[x×]\s*\d+\b|—\s*\d+\s*(set|x)/i.test(m.content);
     const saveBtn = looksLikePlan ? `<div><button class="btn btn-ghost btn-sm" style="margin-top:8px;font-size:10px" onclick="saveCoachAsRoutine(${i})">💾 Save as routine</button></div>` : '';
     return `<div style="align-self:flex-start;max-width:92%;background:var(--bg3);border-radius:13px 13px 13px 3px;padding:9px 12px;font-size:13px;line-height:1.5">${escapeHtml(m.content).replace(/\n/g,'<br>')}${saveBtn}</div>`;
   }).join('');
+  if(coachPending) html += `<div style="align-self:flex-start;background:var(--bg3);border-radius:13px 13px 13px 3px;padding:8px 12px;font-size:13px;color:var(--muted)">Thinking…</div>`;
+  el.innerHTML = html;
   el.scrollTop = el.scrollHeight;
 }
 async function saveCoachAsRoutine(idx) {
-  const m = coachMessages[idx];
+  const m = activeCoachThread().messages[idx];
   if(!m) return;
   toast('Building routine from that…');
   const prompt = `Extract the workout below as JSON ONLY, no markdown, no commentary: {"name":"short routine name","exercises":[{"name":"exercise","sets":number,"reps":number,"weight":number_or_0}]}. If a value is unknown use 0. WORKOUT:\n${m.content}`;
@@ -6308,8 +6396,6 @@ async function saveCoachAsRoutine(idx) {
     toast('Saved "'+String(data.name||'Coach Plan').slice(0,40)+'" as a routine ✓ — check Routines');
   } catch(e) { toast('Could not parse a routine from that'); }
 }
-function saveCoach(){ DB.coachChat = coachMessages.filter(m=>!m.pending); save(); }
-function clearCoach(){ if(coachMessages.length && !confirm('Clear the coach conversation?')) return; coachMessages = []; saveCoach(); renderCoachMessages(); }
 
 // ---- Builder ----
 let builderExercises = [];
