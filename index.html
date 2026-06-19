@@ -488,7 +488,32 @@
     <div class="fit-tab" onclick="switchFitTab('routines',this)">Routines</div>
     <div class="fit-tab" onclick="switchFitTab('mobility',this)">Mobility</div>
     <div class="fit-tab" onclick="switchFitTab('boxing',this)">🥊 Boxing</div>
+    <div class="fit-tab" onclick="switchFitTab('coach',this)">🧠 Coach</div>
   </div>
+  </div>
+
+  <!-- COACH TAB -->
+  <div id="fittab-coach" class="fittab" style="display:none">
+    <div class="card">
+      <h2 style="margin:0 0 4px">🧠 AI Coach</h2>
+      <p style="font-family:var(--mono);font-size:12px;color:var(--muted);margin:0 0 14px">Knows your training. Ask for a split, progression help, or a plan around your schedule.</p>
+      <div id="coach-insights"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-ghost btn-sm" onclick="coachQuick('analyze')">📊 Analyze last week</button>
+        <button class="btn btn-ghost btn-sm" onclick="coachQuick('balance')">⚖️ Balance check</button>
+        <button class="btn btn-ghost btn-sm" onclick="coachQuick('deload')">🛌 Should I deload?</button>
+      </div>
+      <div id="coach-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
+      <div id="coach-messages" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <textarea id="coach-input" rows="1" placeholder="Ask your coach…" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" style="flex:1;resize:none;padding:10px;font-size:16px"></textarea>
+        <button class="btn btn-primary" onclick="sendCoach()">Send</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">General fitness info, not medical or professional training advice.</span>
+        <button class="btn btn-ghost btn-sm" onclick="clearCoach()" style="font-size:10px">Clear chat</button>
+      </div>
+    </div>
   </div>
 
   <!-- LOG TAB -->
@@ -1748,7 +1773,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.32.1</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.33.0</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -6138,7 +6163,153 @@ function switchFitTab(tab, el) {
   if(tab==='routines') renderRoutines();
   if(tab==='mobility') renderMobility();
   if(tab==='boxing') { boxUpdateDisplay(); boxLoadOpts(); renderSavedBoxPresets(); populateVoiceDropdown(); renderBoxDrills(); }
+  if(tab==='coach') renderCoach();
 }
+
+// ================= AI COACH =================
+let coachMessages = [];
+const COACH_CHIPS = ['Suggest a split for me','Help me progress on a lift','Plan around my schedule','Quick workout for today','What should I train next?'];
+function escapeHtml(s){ return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function hasAnyAIKey(){ return ['groq','gemini','openrouter','claude'].some(p=>localStorage.getItem('healthhub_apikey_'+p)); }
+
+function renderCoach() {
+  if((!coachMessages || !coachMessages.length) && Array.isArray(DB.coachChat)) coachMessages = DB.coachChat;
+  renderCoachChips();
+  coachLocalInsights();
+  renderCoachMessages();
+}
+function renderCoachChips() {
+  const el = document.getElementById('coach-chips');
+  if(el) el.innerHTML = COACH_CHIPS.map(c=>`<button onclick="sendCoach('${c.replace(/'/g,"")}')" style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:6px 11px;font-size:11px;font-family:var(--mono);color:var(--text);cursor:pointer">${c}</button>`).join('');
+}
+// Free, instant, no-AI value surfaced every time the tab opens
+function coachLocalInsights() {
+  const el = document.getElementById('coach-insights');
+  if(!el) return;
+  const now = Date.now(), DAY = 86400000;
+  const times = (DB.workouts||[]).map(w=>new Date(w.date).getTime()).filter(t=>!isNaN(t));
+  const ins = [];
+  if(times.length) {
+    const days = Math.floor((now - Math.max(...times))/DAY);
+    if(days>=3) ins.push(`⏰ ${days} days since your last logged workout — time to move?`);
+  }
+  const last7 = times.filter(t=>(now-t)<=7*DAY).length;
+  ins.push(`📅 ${last7} workout${last7!==1?'s':''} in the last 7 days.`);
+  // light PR callout: best weight in last 14d that beats everything before it
+  try {
+    const byEx = {};
+    (DB.workouts||[]).forEach(w=>{
+      const wt = parseFloat(w.weight); if(isNaN(wt) || w.cat==='Cardio') return;
+      const t = new Date(w.date).getTime(); if(isNaN(t)) return;
+      const k=(w.name||'').toLowerCase(); (byEx[k]=byEx[k]||[]).push({wt,t,name:w.name});
+    });
+    for(const k in byEx){
+      const arr=byEx[k]; const recent=arr.filter(x=>(now-x.t)<=14*DAY); const older=arr.filter(x=>(now-x.t)>14*DAY);
+      if(recent.length && older.length){
+        const rMax=Math.max(...recent.map(x=>x.wt)), oMax=Math.max(...older.map(x=>x.wt));
+        if(rMax>oMax){ ins.push(`🎉 Recent PR — ${recent[0].name}: ${rMax} lb (up from ${oMax}).`); break; }
+      }
+    }
+  } catch(e){}
+  el.innerHTML = `<div style="background:var(--bg3);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;line-height:1.7">${ins.map(i=>`<div>${i}</div>`).join('')}</div>`;
+}
+// Tight, recent, high-signal summary — better answers, faster, cheaper than a full dump
+function buildCoachContext() {
+  const now = Date.now(), DAY = 86400000;
+  const recent = (DB.workouts||[]).filter(w=>{ const t=new Date(w.date).getTime(); return !isNaN(t) && (now-t)<=28*DAY; });
+  const byEx = {};
+  recent.forEach(w=>{
+    if(w.cat==='Cardio') return;
+    const k=(w.name||'').toLowerCase(); if(!k) return;
+    if(!byEx[k]) byEx[k]={ name:w.name, count:0, lastW:w.weight||'', lastR:w.reps||'' };
+    byEx[k].count++;
+  });
+  const exLines = Object.values(byEx).sort((a,b)=>b.count-a.count).slice(0,15)
+    .map(e=>`${e.name} (${e.count}x${e.lastW?', last '+e.lastW+'lb':''}${e.lastR?'×'+e.lastR:''})`);
+  const routines = (DB.routines||[]).map(r=>{
+    const dd = Object.keys(DB.schedule||{}).filter(d=>DB.schedule[d]===r.id).map(d=>DOW[d]);
+    return `${r.name} [${r.exercises.length} ex${dd.length?', '+dd.join('/'):''}]`;
+  });
+  const last7 = recent.filter(w=>{ const t=new Date(w.date).getTime(); return (now-t)<=7*DAY; }).length;
+  const bw = DB.healthLog?.find(e=>e.weight)?.weight;
+  let c = `USER TRAINING DATA (last 4 weeks):\n- Workouts last 7 days: ${last7}\n`;
+  if(bw) c += `- Bodyweight: ${bw} lb\n`;
+  c += routines.length ? `- Saved routines: ${routines.join('; ')}\n` : `- No saved routines.\n`;
+  c += exLines.length ? `- Recent lifts: ${exLines.join('; ')}\n` : `- No recent strength workouts logged.\n`;
+  return c;
+}
+// Pull a named lift's fuller progression in only when the question references it
+function coachExerciseContext(q) {
+  const ql=(q||'').toLowerCase();
+  const names=[...new Set((DB.workouts||[]).map(w=>w.name).filter(Boolean))];
+  const hit=names.find(n=>n.length>3 && ql.includes(n.toLowerCase()));
+  if(!hit) return '';
+  const hist=(DB.workouts||[]).filter(w=>w.name===hit).slice(0,8).map(w=>`${w.date}: ${w.weight||'?'}lb×${w.reps||'?'}`);
+  return `\nDETAILED HISTORY for "${hit}" (recent first): ${hist.join('; ')}.`;
+}
+function coachQuick(type) {
+  if(type==='analyze') sendCoach('Analyze my training over the last week — what went well, what to watch, and the one thing to focus on next.');
+  else if(type==='balance') sendCoach('Looking at my recent lifts, is my training balanced across push, pull, and legs? Flag any weak points and how to fix them.');
+  else if(type==='deload') sendCoach('Based on my recent volume and frequency, do I need a deload or extra rest right now? Briefly explain why or why not.');
+}
+async function sendCoach(preset) {
+  const inp = document.getElementById('coach-input');
+  const text = (preset || (inp ? inp.value.trim() : '')).trim();
+  if(!text) return;
+  if(inp && !preset){ inp.value=''; inp.style.height='auto'; }
+  if(!hasAnyAIKey()){
+    coachMessages.push({ role:'user', content:text });
+    coachMessages.push({ role:'assistant', content:'Add an API key in ⚙️ Settings to use the coach — a free Groq key works great and keeps this free.' });
+    saveCoach(); renderCoachMessages(); return;
+  }
+  coachMessages.push({ role:'user', content:text });
+  coachMessages.push({ role:'assistant', content:'', pending:true });
+  saveCoach(); renderCoachMessages();
+  const context = buildCoachContext() + coachExerciseContext(text);
+  const history = coachMessages.filter(m=>!m.pending).slice(-8).map(m=>`${m.role==='user'?'User':'Coach'}: ${m.content}`).join('\n');
+  const prompt = `You are an encouraging, knowledgeable strength & conditioning coach built into a fitness tracking app. Be concise and practical — under ~180 words unless a full plan is requested. Ground every answer in the user's real data below; if data is missing, say so briefly. When you propose a workout, list each exercise as "Name — sets x reps" on its own line so it can be saved as a routine. Never give medical advice.\n\n${context}\nCONVERSATION:\n${history}\n\nCoach:`;
+  try {
+    const reply = await callAIWithImage(prompt, null, 800, 'groq');
+    coachMessages = coachMessages.filter(m=>!m.pending);
+    coachMessages.push({ role:'assistant', content: (reply||'').trim() || 'No response came back — try again.' });
+  } catch(e) {
+    coachMessages = coachMessages.filter(m=>!m.pending);
+    coachMessages.push({ role:'assistant', content: 'Something went wrong: '+(e.message||e)+'. Try again in a moment.' });
+  }
+  saveCoach(); renderCoachMessages();
+}
+function renderCoachMessages() {
+  const el = document.getElementById('coach-messages');
+  if(!el) return;
+  if(!coachMessages.length){ el.innerHTML = `<div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:10px">Ask a question or tap a suggestion to start.</div>`; return; }
+  el.innerHTML = coachMessages.map((m,i)=>{
+    if(m.role==='user') return `<div style="align-self:flex-end;max-width:85%;background:var(--accent);color:#00171a;border-radius:13px 13px 3px 13px;padding:8px 11px;font-size:13px;line-height:1.45">${escapeHtml(m.content).replace(/\n/g,'<br>')}</div>`;
+    if(m.pending) return `<div style="align-self:flex-start;background:var(--bg3);border-radius:13px 13px 13px 3px;padding:8px 12px;font-size:13px;color:var(--muted)">Thinking…</div>`;
+    const looksLikePlan = /\b\d+\s*[x×]\s*\d+\b|—\s*\d+\s*(set|x)/i.test(m.content);
+    const saveBtn = looksLikePlan ? `<div><button class="btn btn-ghost btn-sm" style="margin-top:8px;font-size:10px" onclick="saveCoachAsRoutine(${i})">💾 Save as routine</button></div>` : '';
+    return `<div style="align-self:flex-start;max-width:92%;background:var(--bg3);border-radius:13px 13px 13px 3px;padding:9px 12px;font-size:13px;line-height:1.5">${escapeHtml(m.content).replace(/\n/g,'<br>')}${saveBtn}</div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+async function saveCoachAsRoutine(idx) {
+  const m = coachMessages[idx];
+  if(!m) return;
+  toast('Building routine from that…');
+  const prompt = `Extract the workout below as JSON ONLY, no markdown, no commentary: {"name":"short routine name","exercises":[{"name":"exercise","sets":number,"reps":number,"weight":number_or_0}]}. If a value is unknown use 0. WORKOUT:\n${m.content}`;
+  try {
+    const txt = await callAIWithImage(prompt, null, 500, 'groq');
+    const match = (txt||'').replace(/```json|```/g,'').match(/\{[\s\S]*\}/);
+    if(!match) { toast('Could not read a routine from that'); return; }
+    const data = JSON.parse(match[0]);
+    if(!data.exercises || !data.exercises.length) { toast('No exercises found'); return; }
+    const exercises = data.exercises.map(e=>({ name:String(e.name||'Exercise'), cat:'Strength', sets:e.sets||'', reps:e.reps||'', weight:e.weight||'', unit:'reps' }));
+    DB.routines.push({ id:uid(), name:String(data.name||'Coach Plan').slice(0,40), location:'Gym', exercises });
+    save();
+    toast('Saved "'+String(data.name||'Coach Plan').slice(0,40)+'" as a routine ✓ — check Routines');
+  } catch(e) { toast('Could not parse a routine from that'); }
+}
+function saveCoach(){ DB.coachChat = coachMessages.filter(m=>!m.pending); save(); }
+function clearCoach(){ if(coachMessages.length && !confirm('Clear the coach conversation?')) return; coachMessages = []; saveCoach(); renderCoachMessages(); }
 
 // ---- Builder ----
 let builderExercises = [];
