@@ -704,10 +704,13 @@
         <h2 style="margin:0">My Routines</h2>
         <button class="btn btn-primary btn-sm" onclick="openRoutineBuilder()">+ New Routine</button>
       </div>
-      <div class="budget-tabs" id="routine-filter-tabs" style="margin-bottom:14px">
-        <div class="budget-tab active" onclick="setRoutineFilter('All',this)">All</div>
-        <div class="budget-tab" onclick="setRoutineFilter('Gym',this)">Gym</div>
-        <div class="budget-tab" onclick="setRoutineFilter('Home',this)">Home</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:14px">
+        <div class="budget-tabs" id="routine-filter-tabs" style="margin-bottom:0">
+          <div class="budget-tab active" onclick="setRoutineFilter('All',this)">All</div>
+          <div class="budget-tab" onclick="setRoutineFilter('Gym',this)">Gym</div>
+          <div class="budget-tab" onclick="setRoutineFilter('Home',this)">Home</div>
+        </div>
+        <span id="routine-reorder-slot" style="flex-shrink:0"></span>
       </div>
       <div id="routines-list"></div>
     </div>
@@ -1745,7 +1748,7 @@
   <div class="card">
     <h2>ℹ About</h2>
     <p style="font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7">
-      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.32.0</span> — local-first personal health tracker<br>
+      <strong style="color:var(--text)">Health Hub</strong> <span style="color:var(--accent)">v3.32.1</span> — local-first personal health tracker<br>
       No account required · No data leaves your device (except AI calls to your chosen provider)<br>
       Built as a single HTML file · Works offline after first load
     </p>
@@ -6761,6 +6764,8 @@ function renderRoutines() {
   const el = document.getElementById('routines-list');
   if(!el) return;
   let list = visibleRoutines();
+  const reorderSlot = document.getElementById('routine-reorder-slot');
+  if(reorderSlot) reorderSlot.innerHTML = DB.routines.length>1 ? `<button class="btn btn-ghost btn-sm" style="${routineReorder?'color:var(--accent)':''}" onclick="toggleRoutineReorder()">${routineReorder?'✓ Done':'↕ Reorder'}</button>` : '';
   if(!DB.routines.length) {
     el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No routines yet. Tap "+ New Routine" to build one.</div>' + routineRecoveryHtml();
     return;
@@ -6769,8 +6774,7 @@ function renderRoutines() {
     el.innerHTML='<div class="empty"><div class="empty-icon">📋</div>No '+routineFilter+' routines yet.</div>' + routineRecoveryHtml();
     return;
   }
-  const reorderBtn = DB.routines.length>1 ? `<button class="btn btn-ghost btn-sm" style="margin-bottom:10px${routineReorder?';color:var(--accent)':''}" onclick="toggleRoutineReorder()">${routineReorder?'✓ Done reordering':'↕ Reorder'}</button>` : '';
-  el.innerHTML = reorderBtn + list.map((r,idx)=>{
+  el.innerHTML = list.map((r,idx)=>{
     const days = Object.keys(DB.schedule).filter(d=>DB.schedule[d]===r.id).map(d=>DOW[d]);
     const loc = r.location || 'Gym';
     const fav = !!r.favorite;
